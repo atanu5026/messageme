@@ -6,6 +6,7 @@ const {
   updateAbout,
   updatePassword,
   updatePrivacySettings,
+  toggleBlockUser,
 } = require('../controllers/user.controller');
 const { protect } = require('../middleware/auth.middleware');
 const { upload } = require('../config/cloudinary');
@@ -18,5 +19,6 @@ router.put('/profile-picture', upload.single('image'), updateProfilePicture);
 router.put('/about', updateAbout);
 router.put('/password', updatePassword);
 router.put('/privacy', updatePrivacySettings);
+router.put('/block/:id', toggleBlockUser);
 
 module.exports = router;

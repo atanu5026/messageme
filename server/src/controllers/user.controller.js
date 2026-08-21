@@ -142,10 +142,51 @@ const updatePrivacySettings = async (req, res, next) => {
   }
 };
 
+// @desc    Toggle block/unblock a user
+// @route   PUT /api/users/block/:id
+// @access  Private
+const toggleBlockUser = async (req, res, next) => {
+  try {
+    const userToBlockId = req.params.id;
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (userToBlockId === req.user._id.toString()) {
+      return res.status(400).json({ success: false, message: 'You cannot block yourself' });
+    }
+
+    const isBlocked = user.blockedUsers.includes(userToBlockId);
+
+    if (isBlocked) {
+      // Unblock
+      user.blockedUsers = user.blockedUsers.filter(
+        (id) => id.toString() !== userToBlockId
+      );
+    } else {
+      // Block
+      user.blockedUsers.push(userToBlockId);
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      data: user.blockedUsers,
+      message: isBlocked ? 'User unblocked' : 'User blocked',
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   updateProfile,
   updateProfilePicture,
   updateAbout,
   updatePassword,
   updatePrivacySettings,
+  toggleBlockUser,
 };

@@ -3,6 +3,7 @@ import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import useCallStore from '../../store/useCallStore';
 import AudioRecorder from './AudioRecorder';
+import UserProfileDrawer from './UserProfileDrawer';
 
 const ChatWindow = () => {
   const {
@@ -26,6 +27,7 @@ const ChatWindow = () => {
     editMessage,
     deleteMessage,
     togglePinMessage,
+    sendDocument,
   } = useChatStore();
   
   const { user } = useAuthStore();
@@ -35,10 +37,12 @@ const ChatWindow = () => {
   const [activeReactionMessageId, setActiveReactionMessageId] = useState(null);
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
 
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const docInputRef = useRef(null);
   const messageRefs = useRef({});
 
   // Auto-scroll to bottom on new messages
@@ -100,6 +104,13 @@ const ChatWindow = () => {
     const file = e.target.files[0];
     if (file) {
       sendImage(file);
+    }
+  };
+
+  const handleDocumentSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      sendDocument(file);
     }
   };
 
@@ -177,16 +188,16 @@ const ChatWindow = () => {
             </svg>
           </button>
 
-          <div className="relative shrink-0">
+          <div className="relative shrink-0 cursor-pointer" onClick={() => setShowProfile(!showProfile)}>
             {activeConversation.isGroup ? (
-              <div className="w-10 h-10 rounded-2xl bg-accent flex items-center justify-center text-white font-bold shadow-sm text-sm sm:text-base">
+              <div className="w-10 h-10 rounded-2xl bg-accent flex items-center justify-center text-white font-bold shadow-sm text-sm sm:text-base hover:opacity-80 transition-opacity">
                 {activeConversation.groupName?.charAt(0).toUpperCase()}
               </div>
             ) : (
               otherParticipant?.profilePicture ? (
-                <img src={otherParticipant.profilePicture} alt="Avatar" className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-black/[0.06] dark:border-white/[0.08]" />
+                <img src={otherParticipant.profilePicture} alt="Avatar" className="w-10 h-10 rounded-2xl object-cover shadow-sm border border-black/[0.06] dark:border-white/[0.08] hover:opacity-80 transition-opacity" />
               ) : (
-                <div className="w-10 h-10 rounded-2xl bg-accent-tint text-accent border border-accent flex items-center justify-center font-bold text-sm sm:text-base shadow-sm">
+                <div className="w-10 h-10 rounded-2xl bg-accent-tint text-accent border border-accent flex items-center justify-center font-bold text-sm sm:text-base shadow-sm hover:opacity-80 transition-opacity">
                   {otherParticipant?.name?.charAt(0)?.toUpperCase()}
                 </div>
               )
@@ -196,8 +207,8 @@ const ChatWindow = () => {
             )}
           </div>
 
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm sm:text-base font-bold text-[#1c1c1e] dark:text-[#f5f5f7] leading-tight truncate">
+          <div className="min-w-0 flex-1 cursor-pointer" onClick={() => setShowProfile(!showProfile)}>
+            <h2 className="text-sm sm:text-base font-bold text-[#1c1c1e] dark:text-[#f5f5f7] leading-tight truncate hover:underline">
               {activeConversation.isGroup ? activeConversation.groupName : otherParticipant?.name}
             </h2>
 
@@ -465,6 +476,28 @@ const ChatWindow = () => {
                               className="max-w-[220px] sm:max-w-[340px] max-h-[300px] sm:max-h-[400px] rounded-xl mb-1 object-cover cursor-pointer border border-white/20 shadow-sm"
                               onClick={() => window.open(msg.content, '_blank')}
                             />
+                          ) : msg.type === 'document' ? (
+                            <div className={`flex items-center space-x-3 p-3 rounded-xl mb-1 border shadow-sm ${isMe ? 'bg-black/10 border-white/20 text-white' : 'bg-black/[0.04] dark:bg-white/[0.04] border-black/[0.06] dark:border-white/[0.08] text-[#1c1c1e] dark:text-[#f5f5f7]'}`}>
+                              <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-accent text-white">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-6 h-6">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                                </svg>
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-semibold truncate">{msg.metadata?.fileName || 'Document'}</p>
+                                <p className="text-xs opacity-75">{msg.metadata?.fileSize ? (msg.metadata.fileSize / 1024).toFixed(1) + ' KB' : 'Unknown size'}</p>
+                              </div>
+                              <a
+                                href={msg.content}
+                                download={msg.metadata?.fileName || 'download'}
+                                className={`p-2 rounded-full hover:bg-black/10 dark:hover:bg-white/10 transition-colors shrink-0 ${isMe ? 'text-white' : 'text-accent'}`}
+                                title="Download"
+                              >
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                                </svg>
+                              </a>
+                            </div>
                           ) : msg.type === 'audio' ? (
                             <audio src={msg.content} controls className="max-w-[220px] sm:max-w-[300px] h-9 mb-1 rounded-xl" />
                           ) : (
@@ -502,7 +535,7 @@ const ChatWindow = () => {
                               {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                             </span>
                             {isMe && (
-                              <span className={`text-[10px] font-bold ${msg.status === 'read' ? 'text-white font-black' : 'text-white/70'}`}>
+                              <span className={`text-[10px] font-bold ${msg.status === 'read' ? 'text-[#47c6ff] drop-shadow-sm font-black' : 'text-white/70'}`}>
                                 {msg.status === 'sent' ? '✓' : '✓✓'}
                               </span>
                             )}
@@ -600,6 +633,22 @@ const ChatWindow = () => {
               accept="image/*"
               className="hidden"
             />
+            <input
+              type="file"
+              ref={docInputRef}
+              onChange={handleDocumentSelect}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => docInputRef.current?.click()}
+              className="text-[#8e8e93] hover:text-accent transition-colors p-2 rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.08] shrink-0"
+              title="Add Document"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+              </svg>
+            </button>
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
@@ -642,6 +691,12 @@ const ChatWindow = () => {
           </form>
         </div>
       </div>
+
+      <UserProfileDrawer
+        isOpen={showProfile}
+        onClose={() => setShowProfile(false)}
+        conversation={activeConversation}
+      />
     </div>
   );
 };

@@ -17,21 +17,22 @@ const VideoCall = () => {
     isScreenSharing
   } = useCallStore();
 
-  const localVideoRef = useRef(null);
-  const remoteVideoRef = useRef(null);
+  const mainVideoRef = useRef(null);
+  const pipVideoRef = useRef(null);
+  const [isSwapped, setIsSwapped] = React.useState(false);
 
-  // Bind streams to video elements
+  // Bind streams to video elements based on isSwapped state
   useEffect(() => {
-    if (localVideoRef.current && localStream) {
-      localVideoRef.current.srcObject = localStream;
+    if (mainVideoRef.current) {
+      mainVideoRef.current.srcObject = isSwapped ? localStream : remoteStream;
     }
-  }, [localStream, callStatus]);
+  }, [localStream, remoteStream, callStatus, isSwapped]);
 
   useEffect(() => {
-    if (remoteVideoRef.current && remoteStream) {
-      remoteVideoRef.current.srcObject = remoteStream;
+    if (pipVideoRef.current) {
+      pipVideoRef.current.srcObject = isSwapped ? remoteStream : localStream;
     }
-  }, [remoteStream, callStatus]);
+  }, [localStream, remoteStream, callStatus, isSwapped]);
 
   if (callStatus === 'idle') {
     return null;
@@ -77,13 +78,14 @@ const VideoCall = () => {
   return (
     <div className="fixed inset-0 z-[100] bg-zinc-900 flex flex-col">
       <div className="flex-1 relative">
-        {/* Remote Video (Full Screen) */}
-        {remoteStream ? (
+        {/* Main Video (Full Screen) */}
+        {remoteStream || isSwapped ? (
           <video 
-            ref={remoteVideoRef} 
+            ref={mainVideoRef} 
             autoPlay 
             playsInline
-            className="w-full h-full object-cover" 
+            muted={isSwapped} // Mute local stream if it is in main view to avoid echo
+            className={`w-full h-full object-cover ${(isSwapped && !isScreenSharing) ? 'transform -scale-x-100' : ''}`} 
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-white/50 text-xl font-medium tracking-widest animate-pulse">
@@ -91,16 +93,20 @@ const VideoCall = () => {
           </div>
         )}
 
-        {/* Local Video (Picture in Picture) */}
-        <div className="absolute top-4 sm:top-6 right-4 sm:right-6 w-28 h-40 sm:w-48 sm:h-64 bg-black rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 z-10">
+        {/* PiP Video (Picture in Picture) */}
+        <div 
+          onClick={() => setIsSwapped(!isSwapped)}
+          className="absolute top-4 sm:top-6 right-4 sm:right-6 w-28 h-40 sm:w-48 sm:h-64 bg-black rounded-xl overflow-hidden shadow-2xl border-2 border-white/20 z-10 cursor-pointer hover:scale-105 transition-transform"
+          title="Click to swap view"
+        >
           <video 
-            ref={localVideoRef} 
+            ref={pipVideoRef} 
             autoPlay 
             playsInline 
-            muted 
-            className={`w-full h-full object-cover transform -scale-x-100 ${isVideoOff ? 'hidden' : 'block'}`}
+            muted={!isSwapped} // Mute local stream in PiP
+            className={`w-full h-full object-cover ${(!isSwapped && !isScreenSharing) ? 'transform -scale-x-100' : ''} ${(!isSwapped && isVideoOff) ? 'hidden' : 'block'}`}
           />
-          {isVideoOff && (
+          {(!isSwapped && isVideoOff) && (
             <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-white/50 text-xs sm:text-sm">
               Camera Off
             </div>

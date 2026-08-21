@@ -343,6 +343,32 @@ const togglePinConversation = async (req, res, next) => {
   }
 };
 
+// @desc    Toggle mute conversation for user
+// @route   PUT /api/chat/conversations/:id/mute
+// @access  Private
+const toggleMuteConversation = async (req, res, next) => {
+  try {
+    const conversationId = req.params.id;
+    const conversation = await Conversation.findById(conversationId);
+    
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    const isMuted = conversation.mutedBy.some(id => id.toString() === req.user._id.toString());
+    if (isMuted) {
+      conversation.mutedBy = conversation.mutedBy.filter(id => id.toString() !== req.user._id.toString());
+    } else {
+      conversation.mutedBy.push(req.user._id);
+    }
+
+    await conversation.save();
+    res.status(200).json({ success: true, isMuted: !isMuted, data: conversation });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getConversations,
   createOrGetConversation,
@@ -353,4 +379,5 @@ module.exports = {
   createGroup,
   updateDisappearingMessages,
   togglePinConversation,
+  toggleMuteConversation,
 };

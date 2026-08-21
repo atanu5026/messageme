@@ -14,7 +14,8 @@ const Sidebar = () => {
     unreadCounts,
     startConversation,
     pinnedConversationIds,
-    togglePinConversation
+    togglePinConversation,
+    typingUsers
   } = useChatStore();
   const { logout, user } = useAuthStore();
   
@@ -80,6 +81,7 @@ const Sidebar = () => {
 
     if (conversation.isGroup) {
       const unreadCount = unreadCounts[conversation._id] || 0;
+      const isTyping = typingUsers[conversation._id] && typingUsers[conversation._id].length > 0;
       return (
         <div 
           key={conversation._id}
@@ -106,12 +108,23 @@ const Sidebar = () => {
               )}
             </div>
             <p className={`text-xs truncate ${unreadCount > 0 ? 'text-[#1c1c1e] dark:text-white font-bold' : 'text-[#8e8e93]'}`}>
-              {conversation.lastMessage ? (
-                <span className={unreadCount > 0 ? 'font-bold' : 'font-medium text-[#3a3a3c] dark:text-[#aeaeb2]'}>
-                  {conversation.lastMessage.senderId === user?._id ? 'You: ' : (conversation.lastMessage.senderId?.name?.split(' ')[0] + ': ' || '')}
+              {isTyping ? (
+                <span className="text-accent font-semibold italic flex items-center space-x-1">
+                  <span>typing</span>
+                  <span className="animate-bounce">.</span>
+                  <span className="animate-bounce delay-100">.</span>
+                  <span className="animate-bounce delay-200">.</span>
                 </span>
-              ) : null}
-              {conversation.lastMessage ? (conversation.lastMessage.type === 'image' ? '📷 Photo' : conversation.lastMessage.type === 'audio' ? '🎙️ Voice note' : conversation.lastMessage.content) : 'Start chatting'}
+              ) : (
+                <>
+                  {conversation.lastMessage ? (
+                    <span className={unreadCount > 0 ? 'font-bold' : 'font-medium text-[#3a3a3c] dark:text-[#aeaeb2]'}>
+                      {conversation.lastMessage.senderId === user?._id ? 'You: ' : (conversation.lastMessage.senderId?.name?.split(' ')[0] + ': ' || '')}
+                    </span>
+                  ) : null}
+                  {conversation.lastMessage ? (conversation.lastMessage.type === 'image' ? '📷 Photo' : conversation.lastMessage.type === 'audio' ? '🎙️ Voice note' : conversation.lastMessage.type === 'document' ? '📄 Document' : conversation.lastMessage.content) : 'Start chatting'}
+                </>
+              )}
             </p>
           </div>
 
@@ -145,13 +158,16 @@ const Sidebar = () => {
     if (!otherParticipant) return null;
 
     const unreadCount = unreadCounts[conversation._id] || 0;
+    const isTyping = typingUsers[conversation._id] && typingUsers[conversation._id].length > 0;
     const lastMsg = conversation.lastMessage;
     const lastMsgText = lastMsg 
       ? (lastMsg.type === 'image' 
           ? '📷 Photo' 
           : lastMsg.type === 'audio' 
             ? '🎙️ Voice note' 
-            : (lastMsg.content?.startsWith('{"iv"') ? '🔒 Encrypted message' : lastMsg.content))
+            : lastMsg.type === 'document'
+              ? '📄 Document'
+              : (lastMsg.content?.startsWith('{"iv"') ? '🔒 Encrypted message' : lastMsg.content))
       : 'Start a conversation';
 
     return (
@@ -190,7 +206,16 @@ const Sidebar = () => {
             )}
           </div>
           <p className={`text-xs truncate ${unreadCount > 0 ? 'text-[#1c1c1e] dark:text-white font-bold' : 'text-[#8e8e93]'}`}>
-            {lastMsgText}
+            {isTyping ? (
+              <span className="text-accent font-semibold italic flex items-center space-x-1">
+                <span>typing</span>
+                <span className="animate-bounce">.</span>
+                <span className="animate-bounce delay-100">.</span>
+                <span className="animate-bounce delay-200">.</span>
+              </span>
+            ) : (
+              lastMsgText
+            )}
           </p>
         </div>
 

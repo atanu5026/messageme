@@ -10,6 +10,7 @@ const {
   createGroup,
   updateDisappearingMessages,
   togglePinConversation,
+  toggleMuteConversation,
 } = require('../controllers/chat.controller');
 const { getLinkPreview } = require('../controllers/utils.controller');
 const { protect } = require('../middleware/auth.middleware');
@@ -25,6 +26,7 @@ router.post('/messages/image', upload.single('image'), sendImageMessage);
 router.post('/messages/audio', uploadAudio.single('audio'), sendAudioMessage);
 router.put('/conversations/:id/disappearing', updateDisappearingMessages);
 router.put('/conversations/:id/pin', togglePinConversation);
+router.put('/conversations/:id/mute', toggleMuteConversation);
 router.get('/link-preview', getLinkPreview);
 router.get('/users/search', searchUsers);
 

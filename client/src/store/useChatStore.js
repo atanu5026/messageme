@@ -62,7 +62,7 @@ const useChatStore = create((set, get) => ({
 
       // Decrypt message if needed
       let decryptedMessage = { ...message };
-      if (!message.isGroup && message.type === 'text') {
+      if (!message.isGroup && (message.type === 'text' || message.type === 'document')) {
         const privateKeyString = localStorage.getItem('e2ee_private_key');
         const conv = (activeConversation && activeConversation._id === message.conversationId)
           ? activeConversation
@@ -233,6 +233,12 @@ const useChatStore = create((set, get) => ({
       set((state) => ({
         messages: state.messages.map(m => 
           m.conversationId === conversationId && m.status !== 'read' ? { ...m, status: 'read' } : m
+        ),
+        conversations: state.conversations.map(c => 
+          (c._id === conversationId && c.lastMessage && c.lastMessage.status !== 'read' && 
+          (c.lastMessage.senderId?._id || c.lastMessage.senderId)?.toString() === useAuthStore.getState().user?._id?.toString()) 
+            ? { ...c, lastMessage: { ...c.lastMessage, status: 'read' } } 
+            : c
         )
       }));
     });
@@ -392,6 +398,38 @@ const useChatStore = create((set, get) => ({
     toast.success(isCurrentlyPinned ? 'Conversation unpinned' : 'Conversation pinned to top');
   },
 
+  muteConversation: async (conversationId) => {
+    try {
+      const res = await api.put(`/chat/conversations/${conversationId}/mute`);
+      if (res.data.success) {
+        set((state) => ({
+          activeConversation: state.activeConversation?._id === conversationId 
+            ? { ...state.activeConversation, mutedBy: res.data.data.mutedBy } 
+            : state.activeConversation
+        }));
+        toast.success(res.data.isMuted ? 'Conversation muted' : 'Conversation unmuted');
+      }
+    } catch {
+      toast.error('Failed to mute/unmute conversation');
+    }
+  },
+
+  blockUser: async (userId) => {
+    try {
+      const res = await api.put(`/users/block/${userId}`);
+      if (res.data.success) {
+        toast.success(res.data.message);
+        // We update the local auth user state with the new blockedUsers array
+        const authStore = useAuthStore.getState();
+        if (authStore.user) {
+          authStore.setUser({ ...authStore.user, blockedUsers: res.data.data });
+        }
+      }
+    } catch {
+      toast.error('Failed to block/unblock user');
+    }
+  },
+
   createGroup: async (name, userIds) => {
     try {
       const res = await api.post('/chat/groups', { name, userIds });
@@ -433,10 +471,10 @@ const useChatStore = create((set, get) => ({
       if (res.data.success) {
         const conversation = get().conversations.find(c => c._id === conversationId) || get().activeConversation;
         let messages = res.data.data;
+        const currentUserId = useAuthStore.getState().user?._id;
         
         if (conversation && !conversation.isGroup && conversation.participants) {
           const privateKeyString = localStorage.getItem('e2ee_private_key');
-          const currentUserId = useAuthStore.getState().user?._id;
           const other = conversation.participants.find(p => (p._id || p)?.toString() !== currentUserId?.toString());
           const otherPublicKey = other?.publicKey;
 
@@ -446,12 +484,12 @@ const useChatStore = create((set, get) => ({
               const senderIdStr = (msg.senderId?._id || msg.senderId)?.toString();
               const keyToUse = otherPublicKey || (senderIdStr && senderIdStr !== currentUserId?.toString() ? msg.senderId?.publicKey : null);
               
-              if (msg.type === 'text' && keyToUse) {
+              if ((msg.type === 'text' || msg.type === 'document') && keyToUse) {
                 decryptedContent = await decryptDirectMessage(msg.content, keyToUse, privateKeyString);
               }
 
               let decryptedReplyTo = msg.replyTo;
-              if (msg.replyTo && msg.replyTo.type === 'text' && keyToUse) {
+              if (msg.replyTo && (msg.replyTo.type === 'text' || msg.replyTo.type === 'document') && keyToUse) {
                 const replyContent = await decryptDirectMessage(msg.replyTo.content, keyToUse, privateKeyString);
                 decryptedReplyTo = { ...msg.replyTo, content: replyContent };
               }
@@ -462,6 +500,13 @@ const useChatStore = create((set, get) => ({
         }
         
         set({ messages, isMessagesLoading: false });
+
+        const { socket } = get();
+        const unreadMsg = messages.find(m => m.status !== 'read' && (m.senderId?._id || m.senderId)?.toString() !== currentUserId?.toString());
+        if (socket && unreadMsg) {
+          const senderIdStr = (unreadMsg.senderId?._id || unreadMsg.senderId)?.toString();
+          socket.emit('mark_messages_read', { conversationId, senderId: senderIdStr });
+        }
       }
     } catch (error) {
       set({ error: error.message, isMessagesLoading: false });
@@ -597,6 +642,55 @@ const useChatStore = create((set, get) => ({
     });
 
     set({ replyingToMessage: null });
+  },
+
+  sendDocument: async (file) => {
+    const { socket, activeConversation, replyingToMessage } = get();
+    if (!socket || !activeConversation || !file) return;
+
+    const currentUserId = useAuthStore.getState().user?._id;
+    const otherParticipant = activeConversation.participants.find(p => p._id !== currentUserId);
+    const receiverIds = activeConversation.isGroup
+      ? activeConversation.participants.filter(p => p._id !== currentUserId).map(p => p._id)
+      : (otherParticipant ? [otherParticipant._id] : []);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Data = e.target.result;
+      let finalContent = base64Data;
+      let metadata = { fileName: file.name, fileSize: file.size, fileType: file.type };
+
+      if (!activeConversation.isGroup) {
+        const privateKeyString = localStorage.getItem('e2ee_private_key');
+        const recipientPublicKeyStr = otherParticipant?.publicKey;
+        
+        if (privateKeyString && recipientPublicKeyStr) {
+          try {
+            const privateKey = await importPrivateKey(privateKeyString);
+            const publicKey = await importPublicKey(recipientPublicKeyStr);
+            if (privateKey && publicKey) {
+              const sharedKey = await deriveSharedKey(privateKey, publicKey);
+              if (sharedKey) {
+                finalContent = await encryptPayload(sharedKey, base64Data);
+              }
+            }
+          } catch (err) {
+            console.error("Failed to encrypt document:", err);
+          }
+        }
+      }
+
+      socket.emit('send_message', {
+        conversationId: activeConversation._id,
+        receiverIds,
+        content: finalContent,
+        type: 'document',
+        metadata,
+        replyTo: replyingToMessage?._id || null,
+      });
+      set({ replyingToMessage: null });
+    };
+    reader.readAsDataURL(file);
   },
 
   editMessage: async (messageId, newContent) => {
