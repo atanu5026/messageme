@@ -60,7 +60,45 @@ function App() {
   }, [user, initializeSocket, disconnectSocket, initCallListeners]);
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading application...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[#f2f2f7] dark:bg-[#000000] relative overflow-hidden transition-colors duration-300 messageme-tint-bg">
+        <style>{`
+          @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 0.5; }
+            100% { transform: scale(1.5); opacity: 0; }
+          }
+          @keyframes float-icon {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+          }
+        `}</style>
+        
+        {/* Background glow effect */}
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-64 bg-accent/20 dark:bg-accent/30 rounded-full blur-[80px] pointer-events-none"></div>
+
+        <div className="relative z-10 flex flex-col items-center">
+          {/* Pulsing rings */}
+          <div className="relative flex items-center justify-center w-24 h-24 mb-6">
+            <div className="absolute inset-0 rounded-full border-2 border-accent/40" style={{ animation: 'pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite' }}></div>
+            <div className="absolute inset-0 rounded-full border-2 border-accent/40" style={{ animation: 'pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) 1s infinite' }}></div>
+            
+            {/* Glass Icon Container */}
+            <div className="w-16 h-16 rounded-3xl glass-panel shadow-2xl border border-black/5 dark:border-white/10 flex items-center justify-center" style={{ animation: 'float-icon 3s ease-in-out infinite' }}>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-accent drop-shadow-sm">
+                <path fillRule="evenodd" d="M4.804 21.644A6.707 6.707 0 006 21.75a6.721 6.721 0 003.583-1.029c.774.182 1.584.279 2.417.279 5.322 0 9.75-3.97 9.75-9 0-5.03-4.428-9-9.75-9s-9.75 3.97-9.75 9c0 2.409 1.025 4.587 2.674 6.192.232.226.277.428.254.543a3.73 3.73 0 01-.814 1.686.75.75 0 00.444 1.223zM8.25 10.875a1.125 1.125 0 100 2.25 1.125 1.125 0 000-2.25zM10.875 12a1.125 1.125 0 112.25 0 1.125 1.125 0 01-2.25 0zm4.875-1.125a1.125 1.125 0 100 2.25 1.125 1.125 0 000-2.25z" clipRule="evenodd" />
+              </svg>
+            </div>
+          </div>
+          
+          <h2 className="text-xl font-bold text-[#1c1c1e] dark:text-[#f5f5f7] tracking-tight mb-2">MessageMe</h2>
+          <div className="flex space-x-1.5 items-center justify-center">
+            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
