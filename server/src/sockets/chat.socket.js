@@ -283,4 +283,16 @@ module.exports = (io, socket) => {
   socket.on('ice_candidate', ({ to, candidate }) => {
     io.to(to).emit('ice_candidate', candidate);
   });
+
+  // --- QR LOGIN SIGNALING ---
+  socket.on('qr_login_join', (sessionId) => {
+    socket.join(`qr_session_${sessionId}`);
+  });
+
+  socket.on('qr_login_approve', async ({ sessionId, token, privateKey }) => {
+    // The mobile device (which is authenticated) sends this to the session room
+    if (socket.userId) { // Ensure the approver is actually authenticated
+      io.to(`qr_session_${sessionId}`).emit('qr_login_success', { token, privateKey });
+    }
+  });
 };

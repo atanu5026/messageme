@@ -1,12 +1,46 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import QRCode from 'react-qr-code';
+import { io } from 'socket.io-client';
 import useAuthStore from '../store/useAuthStore';
 
 const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [loginMethod, setLoginMethod] = useState('password'); // 'password' or 'qr'
+  const [qrSessionId, setQrSessionId] = useState('');
   const { login, error, isLoading } = useAuthStore();
+
+  useEffect(() => {
+    if (loginMethod === 'qr') {
+      const sessionId = Math.random().toString(36).substring(2, 15);
+      setQrSessionId(sessionId);
+
+      const socket = io(import.meta.env.VITE_API_URL?.replace('/api', '') || 'http://localhost:3000', {
+        auth: { isQRDesktop: true } // Bypass standard auth
+      });
+
+      socket.on('connect', () => {
+        socket.emit('qr_login_join', sessionId);
+      });
+
+      socket.on('qr_login_success', ({ token, privateKey }) => {
+        // Set the token where api.js and useAuthStore expect it
+        localStorage.setItem('token', token);
+        if (privateKey) {
+          localStorage.setItem('e2ee_private_key', privateKey);
+        }
+        document.cookie = `token=${token}; path=/; max-age=86400`; // 1 day
+        socket.disconnect();
+        window.location.href = '/';
+      });
+
+      return () => {
+        socket.disconnect();
+      };
+    }
+  }, [loginMethod]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -27,13 +61,50 @@ const Login = () => {
           </div>
           <div>
             <h2 className="text-2xl sm:text-3xl font-bold text-[#1c1c1e] dark:text-[#f5f5f7] tracking-tight">
-              Sign In
+              {loginMethod === 'qr' ? 'Login with QR' : 'Sign In'}
             </h2>
-            <p className="text-xs text-[#8e8e93] mt-1">Sign in with your MessageMe-secured credentials</p>
+            <p className="text-xs text-[#8e8e93] mt-1">
+              {loginMethod === 'qr' ? 'Use MessageMe on your phone to scan this code' : 'Sign in with your MessageMe-secured credentials'}
+            </p>
           </div>
         </div>
 
-        <form className="space-y-4" onSubmit={handleSubmit}>
+        {/* Toggle Login Method */}
+        <div className="flex bg-black/[0.04] dark:bg-white/[0.08] rounded-xl p-1 w-full max-w-xs mx-auto">
+          <button 
+            onClick={() => setLoginMethod('password')}
+            className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all ${loginMethod === 'password' ? 'bg-white dark:bg-[#1c1c1e] shadow-sm text-[#1c1c1e] dark:text-[#f5f5f7]' : 'text-[#8e8e93] hover:text-[#1c1c1e] dark:hover:text-[#f5f5f7]'}`}
+          >
+            Password
+          </button>
+          <button 
+            onClick={() => setLoginMethod('qr')}
+            className={`flex-1 text-xs font-bold py-2 rounded-lg transition-all ${loginMethod === 'qr' ? 'bg-white dark:bg-[#1c1c1e] shadow-sm text-[#1c1c1e] dark:text-[#f5f5f7]' : 'text-[#8e8e93] hover:text-[#1c1c1e] dark:hover:text-[#f5f5f7]'}`}
+          >
+            QR Code
+          </button>
+        </div>
+
+        {loginMethod === 'qr' ? (
+          <div className="flex flex-col items-center justify-center py-6 space-y-6">
+            <div className="bg-white p-4 rounded-3xl shadow-sm border border-black/5">
+              {qrSessionId ? (
+                <QRCode 
+                  value={JSON.stringify({ type: 'messageme_qr_login', sessionId: qrSessionId })} 
+                  size={200}
+                />
+              ) : (
+                <div className="w-[200px] h-[200px] flex items-center justify-center bg-gray-100 rounded-xl animate-pulse"></div>
+              )}
+            </div>
+            <div className="text-center space-y-2 text-sm text-[#8e8e93]">
+              <p>1. Open MessageMe on your phone</p>
+              <p>2. Tap the <strong>QR Code icon</strong> in the sidebar</p>
+              <p>3. Point your phone to this screen to confirm login</p>
+            </div>
+          </div>
+        ) : (
+          <form className="space-y-4" onSubmit={handleSubmit}>
           {error && (
             <div className="bg-[#ff3b30]/10 border border-[#ff3b30]/20 p-3 rounded-2xl">
               <p className="text-xs font-semibold text-[#ff3b30] text-center">{error}</p>
@@ -104,7 +175,8 @@ const Login = () => {
               </Link>
             </p>
           </div>
-        </form>
+          </form>
+        )}
       </div>
     </div>
   );

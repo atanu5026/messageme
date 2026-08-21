@@ -9,6 +9,12 @@ const initializeSockets = (io) => {
   // Middleware to authenticate socket connections
   io.use(async (socket, next) => {
     try {
+      // Allow unauthenticated connection specifically for desktop QR login signaling
+      if (socket.handshake.auth.isQRDesktop) {
+        socket.isQRDesktop = true;
+        return next();
+      }
+
       const token = socket.handshake.auth.token;
       if (!token) return next(new Error('Authentication error'));
 
@@ -21,7 +27,16 @@ const initializeSockets = (io) => {
   });
 
   io.on('connection', async (socket) => {
-    console.log(`User connected via socket: ${socket.userId} (${socket.id})`);
+    console.log(`User connected via socket: ${socket.userId || 'QRDesktop'} (${socket.id})`);
+
+    if (socket.isQRDesktop) {
+      // Just initialize chat-specific events and skip user presence tracking
+      require('./chat.socket')(io, socket);
+      socket.on('disconnect', () => {
+        console.log(`QRDesktop disconnected: (${socket.id})`);
+      });
+      return;
+    }
 
     // Add user to online users map
     if (!onlineUsers.has(socket.userId)) {

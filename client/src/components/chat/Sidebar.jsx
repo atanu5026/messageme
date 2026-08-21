@@ -3,6 +3,7 @@ import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import CreateGroupModal from './CreateGroupModal';
 import DiscoverUsersModal from './DiscoverUsersModal';
+import QRScannerModal from './QRScannerModal';
 import StatusRow from '../status/StatusRow';
 import api from '../../services/api';
 
@@ -22,6 +23,7 @@ const Sidebar = () => {
   
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showDiscoverUsers, setShowDiscoverUsers] = useState(false);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -173,76 +175,78 @@ const Sidebar = () => {
       : 'Start a conversation';
 
     return (
-      <div 
-        key={conversation._id}
-        onClick={() => setActiveConversation(conversation)}
-        className={`mx-2 my-1 px-3.5 py-3 rounded-2xl cursor-pointer transition-all duration-150 flex items-center space-x-3.5 group relative ${
-          isActive 
-            ? 'bg-accent-tint border border-accent shadow-sm' 
-            : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05] border border-transparent'
-        }`}
-      >
-        <div className="relative shrink-0">
-          {otherParticipant.profilePicture ? (
-            <img src={otherParticipant.profilePicture} alt="Avatar" className="w-12 h-12 rounded-2xl object-cover shadow-sm border border-black/[0.05] dark:border-white/[0.08]" />
-          ) : (
-            <div className="w-12 h-12 rounded-2xl bg-accent-tint border border-accent text-accent flex items-center justify-center font-bold text-base shadow-sm transition-colors">
-              {otherParticipant.name?.charAt(0)?.toUpperCase()}
-            </div>
-          )}
-          {otherParticipant.isOnline && (
-            <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-[#34c759] border-2 border-white dark:border-[#1c1c1e] rounded-full shadow-sm"></span>
-          )}
-        </div>
-        
-        <div className="flex-1 min-w-0">
-          <div className="flex justify-between items-baseline mb-1">
-            <h3 className={`text-sm font-semibold truncate flex items-center space-x-1.5 ${isActive ? 'text-accent' : 'text-[#1c1c1e] dark:text-[#f5f5f7]'}`}>
-              <span className="truncate">{otherParticipant.name}</span>
-              {isPinned && <span className="text-xs shrink-0" title="Pinned chat">📌</span>}
-            </h3>
-            {lastMsg && (
-              <span className={`text-[11px] shrink-0 font-medium ${unreadCount > 0 ? 'text-accent font-bold' : 'text-[#8e8e93]'}`}>
-                {new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </span>
+      <React.Fragment key={conversation._id}>
+        <div 
+          onClick={() => setActiveConversation(conversation)}
+          className={`mx-2 my-1 px-3.5 py-3 rounded-2xl cursor-pointer transition-all duration-150 flex items-center space-x-3.5 group relative ${
+            isActive 
+              ? 'bg-accent-tint border border-accent shadow-sm' 
+              : 'hover:bg-black/[0.04] dark:hover:bg-white/[0.05] border border-transparent'
+          }`}
+        >
+          <div className="relative shrink-0">
+            {otherParticipant.profilePicture ? (
+              <img src={otherParticipant.profilePicture} alt="Avatar" className="w-12 h-12 rounded-2xl object-cover shadow-sm border border-black/[0.05] dark:border-white/[0.08]" />
+            ) : (
+              <div className="w-12 h-12 rounded-2xl bg-accent-tint border border-accent text-accent flex items-center justify-center font-bold text-base shadow-sm transition-colors">
+                {otherParticipant.name?.charAt(0)?.toUpperCase()}
+              </div>
+            )}
+            {otherParticipant.isOnline && (
+              <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-[#34c759] border-2 border-white dark:border-[#1c1c1e] rounded-full shadow-sm"></span>
             )}
           </div>
-          <p className={`text-xs truncate ${unreadCount > 0 ? 'text-[#1c1c1e] dark:text-white font-bold' : 'text-[#8e8e93]'}`}>
-            {isTyping ? (
-              <span className="text-accent font-semibold italic flex items-center space-x-1">
-                <span>typing</span>
-                <span className="animate-bounce">.</span>
-                <span className="animate-bounce delay-100">.</span>
-                <span className="animate-bounce delay-200">.</span>
-              </span>
-            ) : (
-              lastMsgText
-            )}
-          </p>
-        </div>
-
-        <div className="flex items-center space-x-1.5 shrink-0">
-          {unreadCount > 0 && (
-            <div className="bg-accent text-white text-[11px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center shadow-sm shrink-0 transition-colors">
-              {unreadCount > 99 ? '99+' : unreadCount}
-            </div>
-          )}
           
-          {/* Quick Pin Toggle */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              togglePinConversation(conversation._id);
-            }}
-            className={`p-1 rounded-full text-xs transition-opacity ${
-              isPinned ? 'opacity-100 text-accent' : 'opacity-0 group-hover:opacity-100 text-[#8e8e93] hover:text-accent'
-            }`}
-            title={isPinned ? 'Unpin chat' : 'Pin chat to top'}
-          >
-            📌
-          </button>
+          <div className="flex-1 min-w-0">
+            <div className="flex justify-between items-baseline mb-1">
+              <h3 className={`text-sm font-semibold truncate flex items-center space-x-1.5 ${isActive ? 'text-accent' : 'text-[#1c1c1e] dark:text-[#f5f5f7]'}`}>
+                <span className="truncate">{otherParticipant.name}</span>
+                {isPinned && <span className="text-xs shrink-0" title="Pinned chat">📌</span>}
+              </h3>
+              {lastMsg && (
+                <span className={`text-[11px] shrink-0 font-medium ${unreadCount > 0 ? 'text-accent font-bold' : 'text-[#8e8e93]'}`}>
+                  {new Date(lastMsg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </div>
+            <p className={`text-xs truncate ${unreadCount > 0 ? 'text-[#1c1c1e] dark:text-white font-bold' : 'text-[#8e8e93]'}`}>
+              {isTyping ? (
+                <span className="text-accent font-semibold italic flex items-center space-x-1">
+                  <span>typing</span>
+                  <span className="animate-bounce">.</span>
+                  <span className="animate-bounce delay-100">.</span>
+                  <span className="animate-bounce delay-200">.</span>
+                </span>
+              ) : (
+                lastMsgText
+              )}
+            </p>
+          </div>
+
+          <div className="flex items-center space-x-1.5 shrink-0">
+            {unreadCount > 0 && (
+              <div className="bg-accent text-white text-[11px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center shadow-sm shrink-0 transition-colors">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </div>
+            )}
+            
+            {/* Quick Pin Toggle */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePinConversation(conversation._id);
+              }}
+              className={`p-1 rounded-full text-xs transition-opacity ${
+                isPinned ? 'opacity-100 text-accent' : 'opacity-0 group-hover:opacity-100 text-[#8e8e93] hover:text-accent'
+              }`}
+              title={isPinned ? 'Unpin chat' : 'Pin chat to top'}
+            >
+              📌
+            </button>
+          </div>
         </div>
-      </div>
+        <div className="mx-4 h-[1px] bg-black/[0.04] dark:bg-white/[0.06] backdrop-blur-md shrink-0"></div>
+      </React.Fragment>
     );
   };
 
@@ -253,6 +257,17 @@ const Sidebar = () => {
         <h2 className="text-xl font-bold text-[#1c1c1e] dark:text-[#f5f5f7] tracking-tight">Messages</h2>
         
         <div className="flex items-center space-x-2">
+          <button 
+            onClick={() => setShowQRScanner(true)}
+            className="p-2 rounded-full glass-card hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-accent transition-all md:hidden"
+            title="Link Device"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+            </svg>
+          </button>
+          
           <button 
             onClick={() => setShowDiscoverUsers(true)}
             className="p-2 rounded-full glass-card hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-accent transition-all"
@@ -405,6 +420,11 @@ const Sidebar = () => {
         isOpen={showDiscoverUsers}
         onClose={() => setShowDiscoverUsers(false)}
         onStartChat={handleStartChat}
+      />
+
+      <QRScannerModal
+        isOpen={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
       />
     </div>
   );

@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { get as idbGet, set as idbSet, del as idbDel } from 'idb-keyval';
 import api from '../services/api';
 import { io } from 'socket.io-client';
 import toast from 'react-hot-toast';
@@ -23,7 +25,21 @@ const decryptDirectMessage = async (content, otherPublicKey, privateKeyString) =
   }
 };
 
-const useChatStore = create((set, get) => ({
+const idbStorage = {
+  getItem: async (name) => {
+    return (await idbGet(name)) || null;
+  },
+  setItem: async (name, value) => {
+    await idbSet(name, value);
+  },
+  removeItem: async (name) => {
+    await idbDel(name);
+  },
+};
+
+const useChatStore = create(
+  persist(
+    (set, get) => ({
   socket: null,
   conversations: [],
   activeConversation: null,
@@ -802,6 +818,14 @@ const useChatStore = create((set, get) => ({
       });
     }
   }
+}), {
+  name: 'chat-storage',
+  storage: createJSONStorage(() => idbStorage),
+  partialize: (state) => ({ 
+    conversations: state.conversations, 
+    messages: state.messages,
+    pinnedConversationIds: state.pinnedConversationIds
+  }),
 }));
 
 export default useChatStore;

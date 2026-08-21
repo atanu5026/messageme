@@ -5,22 +5,10 @@ import useStatusStore from '../../store/useStatusStore';
 
 const StatusModal = ({ statusGroup, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
   const { user } = useAuthStore();
   const { deleteStatus } = useStatusStore();
   const isMe = statusGroup.user?._id === user?._id;
-
-  useEffect(() => {
-    // Auto-advance every 5 seconds
-    const timer = setTimeout(() => {
-      if (currentIndex < statusGroup.statuses.length - 1) {
-        setCurrentIndex(prev => prev + 1);
-      } else {
-        onClose();
-      }
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [currentIndex, statusGroup.statuses.length, onClose]);
 
   const handleNext = (e) => {
     e.stopPropagation();
@@ -64,7 +52,13 @@ const StatusModal = ({ statusGroup, onClose }) => {
           100% { width: 100%; }
         }
       `}</style>
-      <div className="relative w-screen h-screen bg-transparent flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div 
+        className="relative w-screen h-screen bg-transparent flex flex-col" 
+        onClick={(e) => e.stopPropagation()}
+        onPointerDown={() => setIsPaused(true)}
+        onPointerUp={() => setIsPaused(false)}
+        onPointerLeave={() => setIsPaused(false)}
+      >
         
         {/* Progress Bars */}
         <div className="absolute top-0 left-0 right-0 p-4 flex space-x-2 z-30 pt-6">
@@ -73,9 +67,13 @@ const StatusModal = ({ statusGroup, onClose }) => {
               <div 
                 key={`${s._id}-${idx === currentIndex ? 'active' : 'idle'}`}
                 className="h-full bg-white shadow-[0_0_8px_rgba(255,255,255,0.8)]"
+                onAnimationEnd={(e) => {
+                  if (idx === currentIndex) handleNext(e);
+                }}
                 style={{ 
                   width: idx < currentIndex ? '100%' : '0%',
-                  animation: idx === currentIndex ? 'statusProgress 5s linear forwards' : 'none'
+                  animation: idx === currentIndex ? 'statusProgress 5s linear forwards' : 'none',
+                  animationPlayState: isPaused ? 'paused' : 'running'
                 }}
               />
             </div>
