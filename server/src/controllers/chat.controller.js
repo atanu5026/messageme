@@ -10,7 +10,7 @@ const getConversations = async (req, res, next) => {
     const conversations = await Conversation.find({
       participants: req.user._id,
     })
-      .populate('participants', 'name email profilePicture isOnline lastSeen publicKey')
+      .populate('participants', 'name email phoneNumber profilePicture isOnline lastSeen publicKey')
       .populate('lastMessage')
       .populate({
         path: 'pinnedMessage',
@@ -42,7 +42,7 @@ const createOrGetConversation = async (req, res, next) => {
     let conversation = await Conversation.findOne({
       type: 'direct',
       participants: { $all: [req.user._id, receiverId] },
-    }).populate('participants', 'name email profilePicture isOnline lastSeen publicKey');
+    }).populate('participants', 'name email phoneNumber profilePicture isOnline lastSeen publicKey');
 
     if (conversation) {
       return res.status(200).json({ success: true, data: conversation });
@@ -55,7 +55,7 @@ const createOrGetConversation = async (req, res, next) => {
     });
 
     const populatedConversation = await Conversation.findById(newConversation._id)
-      .populate('participants', 'name email profilePicture isOnline lastSeen publicKey');
+      .populate('participants', 'name email phoneNumber profilePicture isOnline lastSeen publicKey');
 
     res.status(201).json({ success: true, data: populatedConversation });
   } catch (error) {
@@ -126,13 +126,19 @@ const searchUsers = async (req, res, next) => {
       return res.status(200).json({ success: true, data: [] });
     }
 
-    const users = await User.find({
-      _id: { $ne: req.user._id }, // Don't search for self
-      $or: [
+    let filter = { _id: { $ne: req.user._id } }; // Don't search for self
+
+    if (query !== 'all') {
+      filter.$or = [
         { phoneNumber: query },
-        { connectCode: query }
-      ]
-    }).select('name email phoneNumber connectCode profilePicture about isOnline lastSeen');
+        { connectCode: query },
+        { name: { $regex: query, $options: 'i' } } // case-insensitive regex match for name
+      ];
+    }
+
+    const users = await User.find(filter)
+      .select('name email phoneNumber connectCode profilePicture about isOnline lastSeen')
+      .limit(50); // Limit to 50 for safety
 
     res.status(200).json({
       success: true,
@@ -284,7 +290,7 @@ const createGroup = async (req, res, next) => {
 
     const populatedGroup = await Conversation.findById(newGroup._id).populate(
       'participants',
-      'name profilePicture email isOnline lastSeen publicKey'
+      'name profilePicture email phoneNumber isOnline lastSeen publicKey'
     );
 
     res.status(201).json({ success: true, data: populatedGroup });

@@ -455,7 +455,10 @@ const useChatStore = create((set, get) => ({
           if (!exists) {
             return { conversations: [newConvo, ...state.conversations] };
           }
-          return state;
+          // Update the existing conversation with fresh populated data
+          return { 
+            conversations: state.conversations.map(c => c._id === newConvo._id ? newConvo : c)
+          };
         });
         get().setActiveConversation(newConvo);
       }

@@ -65,6 +65,34 @@ const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
         )}
 
         <div className="w-full mt-6 space-y-3">
+          {!isGroup && otherParticipant && (
+            <div className="w-full p-4 bg-white/50 dark:bg-black/50 rounded-2xl border border-black/[0.04] dark:border-white/[0.04] space-y-3 mb-2">
+              <div className="flex items-center space-x-3 text-[#1c1c1e] dark:text-[#f5f5f7]">
+                <div className="w-8 h-8 rounded-full bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-[#8e8e93]">
+                    <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clipRule="evenodd" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs text-[#8e8e93] font-semibold">Phone</p>
+                  <p className="text-sm font-medium">{otherParticipant.phoneNumber || 'Hidden'}</p>
+                </div>
+              </div>
+              <div className="flex items-center space-x-3 text-[#1c1c1e] dark:text-[#f5f5f7]">
+                <div className="w-8 h-8 rounded-full bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center shrink-0">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-[#8e8e93]">
+                    <path d="M1.5 8.67v8.58a3 3 0 003 3h15a3 3 0 003-3V8.67l-8.928 5.493a3 3 0 01-3.144 0L1.5 8.67z" />
+                    <path d="M22.5 6.908V6.75a3 3 0 00-3-3h-15a3 3 0 00-3 3v.158l9.714 5.978a1.5 1.5 0 001.572 0L22.5 6.908z" />
+                  </svg>
+                </div>
+                <div>
+                  <p className="text-xs text-[#8e8e93] font-semibold">Email</p>
+                  <p className="text-sm font-medium truncate max-w-[200px]">{otherParticipant.email || 'Hidden'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={handleMuteToggle}
             className="w-full flex items-center justify-between p-4 bg-white/50 dark:bg-black/50 rounded-2xl border border-black/[0.04] dark:border-white/[0.04] hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors"
