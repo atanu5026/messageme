@@ -44,20 +44,9 @@ const registerUser = async (req, res, next) => {
     });
 
     if (user) {
-      // Generate tokens
-      const accessToken = generateAccessToken(user._id);
-      const refreshToken = generateRefreshToken(user._id);
-
-      // Set refresh token in HTTP-only cookie
-      res.cookie('jwt', refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      });
-
       res.status(201).json({
         success: true,
+        message: 'Account created successfully',
         data: {
           _id: user._id,
           name: user.name,
@@ -65,8 +54,7 @@ const registerUser = async (req, res, next) => {
           profilePicture: user.profilePicture,
           about: user.about,
           publicKey: user.publicKey,
-        },
-        accessToken,
+        }
       });
     } else {
       res.status(400).json({ success: false, message: 'Invalid user data' });
