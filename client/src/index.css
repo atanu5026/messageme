@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --accent-intensity: 100%;
+    --accent-rgb: 0, 122, 255;
+    --accent-color: rgba(var(--accent-rgb), calc(var(--accent-intensity, 100%) / 100%));
+    --accent-hover: #0066ee;
+    --accent-tint: rgba(var(--accent-rgb), calc(0.14 * (var(--accent-intensity, 100%) / 100%)));
+    --accent-border: rgba(var(--accent-rgb), calc(0.32 * (var(--accent-intensity, 100%) / 100%)));
+    --accent-shadow: rgba(var(--accent-rgb), calc(0.28 * (var(--accent-intensity, 100%) / 100%)));
+  }
+
+  [data-accent="blue"] {
+    --accent-rgb: 0, 122, 255;
+    --accent-hover: #0066ee;
+  }
+
+  [data-accent="purple"] {
+    --accent-rgb: 175, 82, 222;
+    --accent-hover: #9b30d9;
+  }
+
+  [data-accent="pink"] {
+    --accent-rgb: 255, 45, 85;
+    --accent-hover: #e01b44;
+  }
+
+  [data-accent="red"] {
+    --accent-rgb: 255, 59, 48;
+    --accent-hover: #e02b20;
+  }
+
+  [data-accent="orange"] {
+    --accent-rgb: 255, 149, 0;
+    --accent-hover: #e08500;
+  }
+
+  [data-accent="yellow"] {
+    --accent-rgb: 255, 204, 0;
+    --accent-hover: #e0b300;
+  }
+
+  [data-accent="green"] {
+    --accent-rgb: 52, 199, 89;
+    --accent-hover: #28a745;
+  }
+
+  [data-accent="teal"] {
+    --accent-rgb: 48, 176, 199;
+    --accent-hover: #2398ad;
+  }
+
+  [data-accent="indigo"] {
+    --accent-rgb: 88, 86, 214;
+    --accent-hover: #4745b8;
+  }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Helvetica Neue", 'Plus Jakarta Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Outfit", sans-serif;
+    letter-spacing: -0.02em;
+  }
+}
+
+/* Minimalist MessageMe scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 9999px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* MessageMe Liquid / Tinted Glass Panels */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dark .glass-panel {
+  background: rgba(22, 22, 26, 0.72);
+  backdrop-filter: blur(28px) saturate(190%);
+  -webkit-backdrop-filter: blur(28px) saturate(190%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dark .glass-card {
+  background: rgba(28, 28, 30, 0.62);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 24px -1px rgba(0, 0, 0, 0.35);
+}
+
+.glass-input {
+  background: rgba(0, 0, 0, 0.03);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  color: #1c1c1e;
+}
+
+.dark .glass-input {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #f5f5f7;
+}
+
+/* Subtle MessageMe Tinted Atmospheric Canvas */
+.messageme-tint-bg {
+  background-color: #f2f2f7;
+  background-image: 
+    radial-gradient(circle at 50% 0%, var(--accent-tint) 0%, transparent 65%),
+    radial-gradient(circle at 100% 100%, var(--accent-tint) 0%, transparent 55%);
+  transition: background-color 0.4s ease, background-image 0.4s ease;
+}
+
+.dark .messageme-tint-bg {
+  background-color: #000000;
+  background-image: 
+    radial-gradient(circle at 50% 0%, var(--accent-tint) 0%, transparent 60%),
+    radial-gradient(circle at 100% 100%, var(--accent-tint) 0%, transparent 50%);
+  transition: background-color 0.4s ease, background-image 0.4s ease;
+}
+
+/* Dynamic Accent Utility Tokens */
+.bg-accent {
+  background-color: var(--accent-color) !important;
+}
+
+.hover-bg-accent:hover {
+  background-color: var(--accent-hover) !important;
+}
+
+.bg-accent-tint {
+  background-color: var(--accent-tint) !important;
+}
+
+.text-accent {
+  color: var(--accent-color) !important;
+}
+
+.border-accent {
+  border-color: var(--accent-border) !important;
+}
+
+.shadow-accent {
+  box-shadow: 0 4px 14px 0 var(--accent-shadow) !important;
+}
