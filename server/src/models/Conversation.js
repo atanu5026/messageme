@@ -10,6 +10,15 @@ const conversationSchema = new mongoose.Schema(
     name: {
       type: String, // Only for groups
     },
+    status: {
+      type: String,
+      enum: ['pending', 'approved', 'rejected'],
+      default: 'approved',
+    },
+    initiatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+    },
     participants: [
       {
         type: mongoose.Schema.Types.ObjectId,
@@ -32,6 +41,12 @@ const conversationSchema = new mongoose.Schema(
       },
     ],
     mutedBy: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    favoritedBy: [
       {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',

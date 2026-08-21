@@ -28,6 +28,8 @@ const ChatWindow = () => {
     deleteMessage,
     togglePinMessage,
     sendDocument,
+    approveConversation,
+    rejectConversation
   } = useChatStore();
   
   const { user } = useAuthStore();
@@ -570,125 +572,147 @@ const ChatWindow = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Floating MessageMe Glass Input Dock */}
-      <div className="p-3 sm:p-4 relative z-10">
-        <div className="glass-panel rounded-3xl p-1.5 sm:p-2 border border-black/[0.06] dark:border-white/[0.08] shadow-lg transition-all">
-          {/* Quoted Reply Banner above dock */}
-          {replyingToMessage && (
-            <div className="flex items-center justify-between px-3.5 py-2 mb-1.5 bg-black/[0.04] dark:bg-white/[0.06] rounded-2xl border-l-4 border-accent text-xs animate-fade-in">
-              <div className="min-w-0 flex-1">
-                <span className="font-bold text-accent block text-[11px]">
-                  Replying to {replyingToMessage.senderId?.name?.split(' ')[0] || (replyingToMessage.senderId === user?._id ? 'yourself' : 'Message')}
-                </span>
-                <p className="truncate text-[#8e8e93] text-[11px] mt-0.5">
-                  {getCleanMessageContent(replyingToMessage)}
-                </p>
-              </div>
-              <button 
-                onClick={() => setReplyingToMessage(null)}
-                className="text-[#8e8e93] hover:text-[#1c1c1e] dark:hover:text-white p-1 ml-2 rounded-full"
-                title="Cancel reply"
-              >
-                ✕
-              </button>
+      {/* Message Input Dock / Approval Banner */}
+      <div className="bg-transparent px-4 sm:px-6 pb-4 sm:pb-6 pt-2 shrink-0 z-10 transition-colors">
+        <div className="glass-panel p-2 flex flex-col w-full rounded-[2rem] border border-black/[0.06] dark:border-white/[0.08] shadow-sm">
+          {activeConversation.status === 'pending' ? (
+            <div className="p-4 flex flex-col items-center justify-center text-center space-y-3">
+              {activeConversation.initiatedBy === user?._id ? (
+                <div className="text-sm font-medium text-[#8e8e93]">
+                  Waiting for {otherParticipant?.name || 'the user'} to approve your connection request...
+                </div>
+              ) : (
+                <>
+                  <div className="text-sm font-medium text-[#1c1c1e] dark:text-[#f5f5f7]">
+                    {otherParticipant?.name || 'Someone'} wants to connect with you.
+                  </div>
+                  <div className="flex space-x-3 mt-2">
+                    <button
+                      onClick={() => approveConversation(activeConversation._id)}
+                      className="px-6 py-2 bg-accent text-white rounded-full font-bold text-sm shadow-sm hover:opacity-90 transition-opacity"
+                    >
+                      Approve
+                    </button>
+                    <button
+                      onClick={() => rejectConversation(activeConversation._id)}
+                      className="px-6 py-2 bg-black/[0.08] dark:bg-white/[0.12] text-[#1c1c1e] dark:text-[#f5f5f7] rounded-full font-bold text-sm hover:opacity-90 transition-opacity"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                </>
+              )}
             </div>
-          )}
+          ) : (
+            <>
+              {replyingToMessage && (
+                <div className="flex items-center justify-between bg-black/[0.04] dark:bg-white/[0.08] px-4 py-2 rounded-2xl mx-1 mt-1 mb-2 backdrop-blur-sm border border-black/[0.04] dark:border-white/[0.04] transition-colors">
+                  <div className="flex-1 min-w-0 pr-4">
+                    <div className="flex items-center space-x-1.5 text-xs font-semibold text-accent mb-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+                        <path fillRule="evenodd" d="M7.72 12.53a.75.75 0 010-1.06l7.5-7.5a.75.75 0 111.06 1.06L9.31 12l6.97 6.97a.75.75 0 11-1.06 1.06l-7.5-7.5z" clipRule="evenodd" />
+                      </svg>
+                      <span>Replying to {replyingToMessage.senderId?._id === user?._id ? 'yourself' : replyingToMessage.senderId?.name}</span>
+                    </div>
+                    <p className="text-xs text-[#8e8e93] truncate pl-5">
+                      {replyingToMessage.type === 'image' ? '📸 Photo' : replyingToMessage.type === 'audio' ? '🎙️ Voice note' : replyingToMessage.content}
+                    </p>
+                  </div>
+                  <button onClick={() => setReplyingToMessage(null)} className="p-1.5 hover:bg-black/[0.08] dark:hover:bg-white/[0.12] rounded-full text-[#8e8e93] transition-colors shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" /></svg>
+                  </button>
+                </div>
+              )}
+              {editingMessage && (
+                <div className="flex items-center justify-between bg-black/[0.04] dark:bg-white/[0.08] px-4 py-2 rounded-2xl mx-1 mt-1 mb-2 backdrop-blur-sm border border-black/[0.04] dark:border-white/[0.04] transition-colors">
+                  <div className="flex-1 min-w-0 pr-4">
+                    <div className="flex items-center space-x-1.5 text-xs font-semibold text-accent mb-0.5">
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M21.731 2.269a2.625 2.625 0 00-3.712 0l-1.157 1.158 3.71 3.71 1.159-1.157a2.625 2.625 0 000-3.711z" /><path d="M10.731 13.269l7.63-7.63-3.71-3.71-7.63 7.63-2.6 6.307a.75.75 0 00.99.99l6.32-2.587z" /></svg>
+                      <span>Editing message</span>
+                    </div>
+                  </div>
+                  <button onClick={() => setEditingMessage(null)} className="p-1.5 hover:bg-black/[0.08] dark:hover:bg-white/[0.12] rounded-full text-[#8e8e93] transition-colors shrink-0">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M5.47 5.47a.75.75 0 011.06 0L12 10.94l5.47-5.47a.75.75 0 111.06 1.06L13.06 12l5.47 5.47a.75.75 0 11-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 01-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 010-1.06z" clipRule="evenodd" /></svg>
+                  </button>
+                </div>
+              )}
 
-          {/* Edit Message Banner above dock */}
-          {editingMessage && (
-            <div className="flex items-center justify-between px-3.5 py-2 mb-1.5 bg-accent-tint rounded-2xl border-l-4 border-accent text-xs animate-fade-in">
-              <div className="min-w-0 flex-1">
-                <span className="font-bold text-accent block text-[11px]">
-                  ✏️ Editing message
-                </span>
-                <p className="truncate text-[#8e8e93] text-[11px] mt-0.5">
-                  Press enter to save changes
-                </p>
-              </div>
-              <button 
-                onClick={cancelEdit}
-                className="text-[#8e8e93] hover:text-[#1c1c1e] dark:hover:text-white p-1 ml-2 rounded-full font-bold text-xs"
-                title="Cancel edit"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-
-          {isImageUploading && (
-            <div className="absolute -top-8 left-6 text-xs font-semibold text-accent flex items-center glass-card px-3 py-1 rounded-full shadow-sm border border-accent">
-              <svg className="animate-spin -ml-1 mr-2 h-3.5 w-3.5 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Encrypting & Uploading...
-            </div>
-          )}
-
-          <form onSubmit={handleSend} className="flex items-center space-x-2">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageSelect}
-              accept="image/*"
-              className="hidden"
-            />
-            <input
-              type="file"
-              ref={docInputRef}
-              onChange={handleDocumentSelect}
-              className="hidden"
-            />
-            <button
-              type="button"
-              onClick={() => docInputRef.current?.click()}
-              className="text-[#8e8e93] hover:text-accent transition-colors p-2 rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.08] shrink-0"
-              title="Add Document"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="text-[#8e8e93] hover:text-accent transition-colors p-2 rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.08] shrink-0"
-              title="Add Photo"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
-              </svg>
-            </button>
-
-            <div className="flex-1 min-w-0">
-              <input
-                type="text"
-                value={inputText}
-                onChange={handleInputChange}
-                placeholder={editingMessage ? "Edit your message..." : "MessageMe..."}
-                className="w-full bg-transparent text-[#1c1c1e] dark:text-[#f5f5f7] placeholder-[#8e8e93] border-none rounded-full px-3 sm:px-4 py-2 text-xs sm:text-sm focus:outline-none transition-all"
-              />
-            </div>
-
-            {inputText.trim() ? (
-              <button
-                type="submit"
-                disabled={!inputText.trim()}
-                className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-accent text-white flex items-center justify-center hover-bg-accent transition-all shadow-accent shrink-0 active:scale-95"
-                title={editingMessage ? "Save" : "Send"}
-              >
-                {editingMessage ? (
-                  <span className="text-xs font-bold">✓</span>
-                ) : (
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5">
-                    <path d="M3.478 2.404a.75.75 0 00-.926.941l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.404z" />
+              {isImageUploading && (
+                <div className="flex items-center justify-center py-2 text-xs font-semibold text-accent bg-accent-tint mx-1 rounded-2xl mb-2">
+                  <svg className="animate-spin -ml-1 mr-2 h-3.5 w-3.5 text-accent" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
+                  Encrypting & Uploading...
+                </div>
+              )}
+
+              <form onSubmit={handleSend} className="flex items-center space-x-2">
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleImageSelect}
+                  accept="image/*"
+                  className="hidden"
+                />
+                <input
+                  type="file"
+                  ref={docInputRef}
+                  onChange={handleDocumentSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => docInputRef.current?.click()}
+                  className="text-[#8e8e93] hover:text-accent transition-colors p-2 rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.08] shrink-0"
+                  title="Add Document"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="text-[#8e8e93] hover:text-accent transition-colors p-2 rounded-full hover:bg-black/[0.04] dark:hover:bg-white/[0.08] shrink-0"
+                  title="Add Photo"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.75} stroke="currentColor" className="w-5 h-5 sm:w-6 sm:h-6">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909m-18 3.75h16.5a1.5 1.5 0 001.5-1.5V6a1.5 1.5 0 00-1.5-1.5H3.75A1.5 1.5 0 002.25 6v12a1.5 1.5 0 001.5 1.5zm10.5-11.25h.008v.008h-.008V8.25zm.375 0a.375.375 0 11-.75 0 .375.375 0 01.75 0z" />
+                  </svg>
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <input
+                    type="text"
+                    value={inputText}
+                    onChange={handleInputChange}
+                    placeholder={editingMessage ? "Edit your message..." : "MessageMe..."}
+                    className="w-full bg-transparent text-[#1c1c1e] dark:text-[#f5f5f7] placeholder-[#8e8e93] border-none rounded-full px-3 sm:px-4 py-2 text-xs sm:text-sm focus:outline-none transition-all"
+                  />
+                </div>
+
+                {inputText.trim() ? (
+                  <button
+                    type="submit"
+                    disabled={!inputText.trim()}
+                    className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-accent text-white flex items-center justify-center hover-bg-accent transition-all shadow-accent shrink-0 active:scale-95"
+                    title={editingMessage ? "Save" : "Send"}
+                  >
+                    {editingMessage ? (
+                      <span className="text-xs font-bold">✓</span>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 sm:w-5 sm:h-5 ml-0.5">
+                        <path d="M3.478 2.404a.75.75 0 00-.926.941l2.432 7.905H13.5a.75.75 0 010 1.5H4.984l-2.432 7.905a.75.75 0 00.926.94 60.519 60.519 0 0018.445-8.986.75.75 0 000-1.218A60.517 60.517 0 003.478 2.404z" />
+                      </svg>
+                    )}
+                  </button>
+                ) : (
+                  <AudioRecorder onSendAudio={sendAudio} isUploading={isAudioUploading} />
                 )}
-              </button>
-            ) : (
-              <AudioRecorder onSendAudio={sendAudio} isUploading={isAudioUploading} />
-            )}
-          </form>
+              </form>
+            </>
+          )}
         </div>
       </div>
 

@@ -3,7 +3,7 @@ import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 
 const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
-  const { blockUser, muteConversation } = useChatStore();
+  const { blockUser, muteConversation, deleteConversation } = useChatStore();
   const { user: currentUser } = useAuthStore();
 
   if (!isOpen || !conversation) return null;
@@ -23,6 +23,13 @@ const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
   const handleBlockToggle = () => {
     if (otherParticipant?._id) {
       blockUser(otherParticipant._id);
+    }
+  };
+
+  const handleDeleteChat = () => {
+    if (window.confirm('Are you sure you want to delete this chat? This action cannot be undone.')) {
+      deleteConversation(conversation._id);
+      onClose();
     }
   };
 
@@ -67,17 +74,6 @@ const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
         <div className="w-full mt-6 space-y-3">
           {!isGroup && otherParticipant && (
             <div className="w-full p-4 bg-white/50 dark:bg-black/50 rounded-2xl border border-black/[0.04] dark:border-white/[0.04] space-y-3 mb-2">
-              <div className="flex items-center space-x-3 text-[#1c1c1e] dark:text-[#f5f5f7]">
-                <div className="w-8 h-8 rounded-full bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center shrink-0">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-[#8e8e93]">
-                    <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                <div>
-                  <p className="text-xs text-[#8e8e93] font-semibold">Phone</p>
-                  <p className="text-sm font-medium">{otherParticipant.phoneNumber || 'Hidden'}</p>
-                </div>
-              </div>
               <div className="flex items-center space-x-3 text-[#1c1c1e] dark:text-[#f5f5f7]">
                 <div className="w-8 h-8 rounded-full bg-black/[0.04] dark:bg-white/[0.08] flex items-center justify-center shrink-0">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-[#8e8e93]">
@@ -132,6 +128,20 @@ const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
               </div>
             </button>
           )}
+
+          <button
+            onClick={handleDeleteChat}
+            className="w-full flex items-center justify-between p-4 bg-white/50 dark:bg-black/50 rounded-2xl border border-black/[0.04] dark:border-white/[0.04] hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors"
+          >
+            <div className="flex items-center space-x-3 text-[#ff3b30]">
+              <div className="w-10 h-10 rounded-xl bg-[#ff3b30]/10 flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                  <path fillRule="evenodd" d="M16.5 4.478v.227a48.816 48.816 0 013.878.512.75.75 0 11-.256 1.478l-.209-.035-1.005 13.07a3 3 0 01-2.991 2.77H8.084a3 3 0 01-2.991-2.77L4.087 6.66l-.209.035a.75.75 0 01-.256-1.478A48.567 48.567 0 017.5 4.705v-.227c0-1.564 1.213-2.9 2.816-2.951a52.662 52.662 0 013.369 0c1.603.051 2.815 1.387 2.815 2.951zm-6.136-1.452a51.196 51.196 0 013.273 0C14.39 3.05 15 3.684 15 4.478v.113a49.488 49.488 0 00-6 0v-.113c0-.794.609-1.428 1.364-1.452zm-.355 5.945a.75.75 0 10-1.5.058l.347 9a.75.75 0 101.499-.058l-.346-9zm5.48.058a.75.75 0 10-1.498-.058l-.347 9a.75.75 0 001.5.058l.345-9z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <span className="font-semibold text-sm">Delete Chat</span>
+            </div>
+          </button>
         </div>
       </div>
     </div>

@@ -97,6 +97,13 @@ const useChatStore = create(
 
         if (otherPublicKey && privateKeyString) {
           decryptedMessage.content = await decryptDirectMessage(message.content, otherPublicKey, privateKeyString);
+          
+          if (message.replyTo && (message.replyTo.type === 'text' || message.replyTo.type === 'document')) {
+            decryptedMessage.replyTo = {
+              ...message.replyTo,
+              content: await decryptDirectMessage(message.replyTo.content, otherPublicKey, privateKeyString)
+            };
+          }
         }
       }
 
@@ -111,7 +118,12 @@ const useChatStore = create(
             return state;
           }
           return {
-            messages: [...state.messages, decryptedMessage]
+            messages: [...state.messages, decryptedMessage],
+            conversations: state.conversations.map(c => 
+              c._id === decryptedMessage.conversationId 
+                ? { ...c, lastMessage: decryptedMessage } 
+                : c
+            )
           };
         });
         
@@ -122,12 +134,17 @@ const useChatStore = create(
       } else {
         const senderIdStr = (decryptedMessage.senderId?._id || decryptedMessage.senderId)?.toString();
         if (senderIdStr !== currentUserId?.toString()) {
-          set({
+          set((state) => ({
             unreadCounts: {
-              ...unreadCounts,
-              [message.conversationId]: (unreadCounts[message.conversationId] || 0) + 1
-            }
-          });
+              ...state.unreadCounts,
+              [message.conversationId]: (state.unreadCounts[message.conversationId] || 0) + 1
+            },
+            conversations: state.conversations.map(c => 
+              c._id === decryptedMessage.conversationId 
+                ? { ...c, lastMessage: decryptedMessage } 
+                : c
+            )
+          }));
         }
       }
 
@@ -137,7 +154,10 @@ const useChatStore = create(
       const senderIdStr = (decryptedMessage.senderId?._id || decryptedMessage.senderId)?.toString();
       const isFromOther = senderIdStr && senderIdStr !== currentUserId?.toString();
       const senderName = decryptedMessage.senderId?.name?.split(' ')[0] || 'Someone';
-      const notificationText = decryptedMessage.type === 'image' ? '📸 Sent an image' : decryptedMessage.type === 'audio' ? '🎙️ Voice note' : decryptedMessage.content;
+      let notificationText = decryptedMessage.type === 'image' ? '📸 Sent an image' : decryptedMessage.type === 'audio' ? '🎙️ Voice note' : decryptedMessage.content;
+      if (typeof notificationText === 'string' && notificationText.startsWith('{"iv"')) {
+        notificationText = '🔒 Encrypted message';
+      }
 
       if (isFromOther) {
         if (!isWindowFocused || !isCurrentActiveChat) {
@@ -259,6 +279,67 @@ const useChatStore = create(
       }));
     });
 
+    socket.on('connection_request_received', (conversation) => {
+      set((state) => {
+        if (!state.conversations.some(c => c._id === conversation._id)) {
+          return { conversations: [conversation, ...state.conversations] };
+        }
+        return state;
+      });
+      toast.info(`New connection request received!`);
+    });
+
+    socket.on('connection_request_approved', (conversation) => {
+      set((state) => ({
+        conversations: state.conversations.map(c => c._id === conversation._id ? conversation : c),
+        activeConversation: state.activeConversation?._id === conversation._id ? conversation : state.activeConversation
+      }));
+      toast.success('Your connection request was approved!');
+    });
+
+    socket.on('connection_request_rejected', (conversationId) => {
+      set((state) => ({
+        conversations: state.conversations.filter(c => c._id !== conversationId),
+        activeConversation: state.activeConversation?._id === conversationId ? null : state.activeConversation
+      }));
+      toast.info('A connection request was rejected.');
+    });
+
+    socket.on('conversation_deleted', (conversationId) => {
+      set((state) => ({
+        conversations: state.conversations.filter(c => c._id !== conversationId),
+        activeConversation: state.activeConversation?._id === conversationId ? null : state.activeConversation
+      }));
+    });
+
+    socket.on('conversation_favorited', (conversationId, isFavorited) => {
+      const currentUserId = useAuthStore.getState().user?._id;
+      set((state) => ({
+        conversations: state.conversations.map(c => {
+          if (c._id === conversationId) {
+            let newFavoritedBy = c.favoritedBy || [];
+            if (isFavorited) {
+              if (!newFavoritedBy.includes(currentUserId)) {
+                newFavoritedBy = [...newFavoritedBy, currentUserId];
+              }
+            } else {
+              newFavoritedBy = newFavoritedBy.filter(id => id.toString() !== currentUserId?.toString());
+            }
+            return { ...c, favoritedBy: newFavoritedBy };
+          }
+          return c;
+        }),
+        activeConversation: state.activeConversation?._id === conversationId 
+          ? { 
+              ...state.activeConversation, 
+              favoritedBy: isFavorited 
+                ? [...(state.activeConversation.favoritedBy || []), currentUserId] 
+                : (state.activeConversation.favoritedBy || []).filter(id => id.toString() !== currentUserId?.toString()) 
+            }
+          : state.activeConversation
+      }));
+    });
+
     socket.on('user_online', ({ userId }) => {
       set((state) => ({
         conversations: state.conversations.map(c => {
@@ -336,23 +417,25 @@ const useChatStore = create(
     try {
       const res = await api.get('/chat/conversations');
       if (res.data.success) {
-        let conversations = res.data.data;
-        const privateKeyString = localStorage.getItem('e2ee_private_key');
         const currentUserId = useAuthStore.getState().user?._id;
+        const privateKeyString = localStorage.getItem('e2ee_private_key');
         
+        let fetchedConversations = res.data.data;
+        
+        // Decrypt lastMessage for direct chats
         if (privateKeyString) {
-          conversations = await Promise.all(conversations.map(async (conv) => {
+          fetchedConversations = await Promise.all(fetchedConversations.map(async (conv) => {
             if (!conv.isGroup && conv.participants) {
               const other = conv.participants.find(p => (p._id || p)?.toString() !== currentUserId?.toString());
               if (other?.publicKey) {
                 let decryptedLastMsg = conv.lastMessage;
-                if (conv.lastMessage && conv.lastMessage.type === 'text') {
+                if (conv.lastMessage && (conv.lastMessage.type === 'text' || conv.lastMessage.type === 'document')) {
                   const decrypted = await decryptDirectMessage(conv.lastMessage.content, other.publicKey, privateKeyString);
                   decryptedLastMsg = { ...conv.lastMessage, content: decrypted };
                 }
 
                 let decryptedPinnedMsg = conv.pinnedMessage;
-                if (conv.pinnedMessage && conv.pinnedMessage.type === 'text') {
+                if (conv.pinnedMessage && (conv.pinnedMessage.type === 'text' || conv.pinnedMessage.type === 'document')) {
                   const decrypted = await decryptDirectMessage(conv.pinnedMessage.content, other.publicKey, privateKeyString);
                   decryptedPinnedMsg = { ...conv.pinnedMessage, content: decrypted };
                 }
@@ -368,7 +451,7 @@ const useChatStore = create(
           }));
         }
 
-        set({ conversations, isConversationsLoading: false });
+        set({ conversations: fetchedConversations, isConversationsLoading: false });
       }
     } catch (error) {
       set({ error: error.message, isConversationsLoading: false });
@@ -414,6 +497,43 @@ const useChatStore = create(
     toast.success(isCurrentlyPinned ? 'Conversation unpinned' : 'Conversation pinned to top');
   },
 
+  toggleFavoriteConversation: async (conversationId) => {
+    try {
+      const res = await api.put(`/chat/conversations/${conversationId}/favorite`);
+      if (res.data.success) {
+        const currentUserId = useAuthStore.getState().user?._id;
+        const isFavorited = res.data.isFavorited;
+        set((state) => ({
+          conversations: state.conversations.map(c => {
+            if (c._id === conversationId) {
+              let newFavoritedBy = c.favoritedBy || [];
+              if (isFavorited) {
+                if (!newFavoritedBy.includes(currentUserId)) {
+                  newFavoritedBy = [...newFavoritedBy, currentUserId];
+                }
+              } else {
+                newFavoritedBy = newFavoritedBy.filter(id => id.toString() !== currentUserId?.toString());
+              }
+              return { ...c, favoritedBy: newFavoritedBy };
+            }
+            return c;
+          }),
+          activeConversation: state.activeConversation?._id === conversationId 
+            ? { 
+                ...state.activeConversation, 
+                favoritedBy: isFavorited 
+                  ? [...(state.activeConversation.favoritedBy || []), currentUserId] 
+                  : (state.activeConversation.favoritedBy || []).filter(id => id.toString() !== currentUserId?.toString()) 
+              }
+            : state.activeConversation
+        }));
+        toast.success(isFavorited ? 'Added to favorites' : 'Removed from favorites');
+      }
+    } catch {
+      toast.error('Failed to update favorites');
+    }
+  },
+
   muteConversation: async (conversationId) => {
     try {
       const res = await api.put(`/chat/conversations/${conversationId}/mute`);
@@ -430,6 +550,21 @@ const useChatStore = create(
     }
   },
 
+  deleteConversation: async (conversationId) => {
+    try {
+      const res = await api.delete(`/chat/conversations/${conversationId}`);
+      if (res.data.success) {
+        set((state) => ({
+          conversations: state.conversations.filter(c => c._id !== conversationId),
+          activeConversation: state.activeConversation?._id === conversationId ? null : state.activeConversation
+        }));
+        toast.success('Conversation deleted');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to delete conversation');
+    }
+  },
+
   blockUser: async (userId) => {
     try {
       const res = await api.put(`/users/block/${userId}`);
@@ -443,6 +578,36 @@ const useChatStore = create(
       }
     } catch {
       toast.error('Failed to block/unblock user');
+    }
+  },
+
+  approveConversation: async (conversationId) => {
+    try {
+      const res = await api.put(`/chat/conversations/${conversationId}/approve`);
+      if (res.data.success) {
+        set((state) => ({
+          conversations: state.conversations.map(c => c._id === conversationId ? res.data.data : c),
+          activeConversation: state.activeConversation?._id === conversationId ? res.data.data : state.activeConversation
+        }));
+        toast.success('Connection request approved');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to approve request');
+    }
+  },
+
+  rejectConversation: async (conversationId) => {
+    try {
+      const res = await api.put(`/chat/conversations/${conversationId}/reject`);
+      if (res.data.success) {
+        set((state) => ({
+          conversations: state.conversations.filter(c => c._id !== conversationId),
+          activeConversation: state.activeConversation?._id === conversationId ? null : state.activeConversation
+        }));
+        toast.success('Connection request rejected');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to reject request');
     }
   },
 

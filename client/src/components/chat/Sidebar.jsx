@@ -2,8 +2,6 @@ import React, { useState, useEffect } from 'react';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 import CreateGroupModal from './CreateGroupModal';
-import DiscoverUsersModal from './DiscoverUsersModal';
-import QRScannerModal from './QRScannerModal';
 import StatusRow from '../status/StatusRow';
 import api from '../../services/api';
 
@@ -17,13 +15,14 @@ const Sidebar = () => {
     startConversation,
     pinnedConversationIds,
     togglePinConversation,
+    toggleFavoriteConversation,
     typingUsers
   } = useChatStore();
   const { logout, user } = useAuthStore();
   
+  const [filterCategory, setFilterCategory] = useState('all'); // 'all', 'unread', 'favorites'
+  
   const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [showDiscoverUsers, setShowDiscoverUsers] = useState(false);
-  const [showQRScanner, setShowQRScanner] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
@@ -70,8 +69,18 @@ const Sidebar = () => {
     }
   };
 
-  // Sort conversations: Pinned first, then by last updated
-  const sortedConversations = [...conversations].sort((a, b) => {
+  // Filter and sort conversations
+  const filteredConversations = conversations.filter(c => {
+    if (filterCategory === 'unread') {
+      return (unreadCounts[c._id] || 0) > 0;
+    }
+    if (filterCategory === 'favorites') {
+      return c.favoritedBy && c.favoritedBy.includes(user?._id);
+    }
+    return true;
+  });
+
+  const sortedConversations = [...filteredConversations].sort((a, b) => {
     const aPinned = pinnedConversationIds.includes(a._id);
     const bPinned = pinnedConversationIds.includes(b._id);
     if (aPinned && !bPinned) return -1;
@@ -139,6 +148,20 @@ const Sidebar = () => {
               </div>
             )}
             
+            {/* Quick Favorite Toggle */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavoriteConversation(conversation._id);
+              }}
+              className={`p-1 rounded-full text-xs transition-opacity ${
+                conversation.favoritedBy?.includes(user?._id) ? 'opacity-100 text-[#ff3b30]' : 'opacity-0 group-hover:opacity-100 text-[#8e8e93] hover:text-[#ff3b30]'
+              }`}
+              title={conversation.favoritedBy?.includes(user?._id) ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {conversation.favoritedBy?.includes(user?._id) ? '❤️' : '🤍'}
+            </button>
+
             {/* Quick Pin Toggle */}
             <button
               onClick={(e) => {
@@ -230,6 +253,20 @@ const Sidebar = () => {
               </div>
             )}
             
+            {/* Quick Favorite Toggle */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                toggleFavoriteConversation(conversation._id);
+              }}
+              className={`p-1 rounded-full text-xs transition-opacity ${
+                conversation.favoritedBy?.includes(user?._id) ? 'opacity-100 text-[#ff3b30]' : 'opacity-0 group-hover:opacity-100 text-[#8e8e93] hover:text-[#ff3b30]'
+              }`}
+              title={conversation.favoritedBy?.includes(user?._id) ? 'Remove from favorites' : 'Add to favorites'}
+            >
+              {conversation.favoritedBy?.includes(user?._id) ? '❤️' : '🤍'}
+            </button>
+
             {/* Quick Pin Toggle */}
             <button
               onClick={(e) => {
@@ -257,27 +294,6 @@ const Sidebar = () => {
         <h2 className="text-xl font-bold text-[#1c1c1e] dark:text-[#f5f5f7] tracking-tight">Messages</h2>
         
         <div className="flex items-center space-x-2">
-          <button 
-            onClick={() => setShowQRScanner(true)}
-            className="p-2 rounded-full glass-card hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-accent transition-all md:hidden"
-            title="Link Device"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
-            </svg>
-          </button>
-          
-          <button 
-            onClick={() => setShowDiscoverUsers(true)}
-            className="p-2 rounded-full glass-card hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-accent transition-all"
-            title="Discover Users"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-4 h-4">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7.5v3m0 0v3m0-3h3m-3 0h-3m-2.25-4.125a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zM4 19.235v-.11a6.375 6.375 0 0112.75 0v.109A12.318 12.318 0 0110.374 21c-2.331 0-4.512-.645-6.374-1.766z" />
-            </svg>
-          </button>
-          
           <button 
             onClick={() => setShowCreateGroup(true)}
             className="p-2 rounded-full glass-card hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-accent transition-all"
@@ -318,7 +334,7 @@ const Sidebar = () => {
 
       {/* Search Input */}
       <div className="p-3 border-b border-black/[0.06] dark:border-white/[0.08] shrink-0">
-        <div className="relative flex items-center">
+        <div className="relative flex items-center mb-2">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-[#8e8e93] absolute left-3.5 pointer-events-none">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
           </svg>
@@ -337,6 +353,23 @@ const Sidebar = () => {
               ✕
             </button>
           )}
+        </div>
+        
+        {/* Filter Pills */}
+        <div className="flex items-center space-x-2 overflow-x-auto no-scrollbar pb-1">
+          {['all', 'unread', 'favorites'].map(filter => (
+            <button
+              key={filter}
+              onClick={() => setFilterCategory(filter)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold capitalize transition-all shrink-0 ${
+                filterCategory === filter 
+                  ? 'bg-accent text-white shadow-sm' 
+                  : 'bg-black/[0.04] dark:bg-white/[0.06] text-[#8e8e93] hover:text-[#1c1c1e] dark:hover:text-[#f5f5f7]'
+              }`}
+            >
+              {filter}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -415,17 +448,6 @@ const Sidebar = () => {
           onClose={() => setShowCreateGroup(false)} 
         />
       )}
-
-      <DiscoverUsersModal
-        isOpen={showDiscoverUsers}
-        onClose={() => setShowDiscoverUsers(false)}
-        onStartChat={handleStartChat}
-      />
-
-      <QRScannerModal
-        isOpen={showQRScanner}
-        onClose={() => setShowQRScanner(false)}
-      />
     </div>
   );
 };

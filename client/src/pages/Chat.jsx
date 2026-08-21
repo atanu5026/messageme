@@ -4,20 +4,7 @@ import ChatWindow from '../components/chat/ChatWindow';
 import useChatStore from '../store/useChatStore';
 
 const Chat = () => {
-  const { initializeSocket, disconnectSocket } = useChatStore();
-
-  useEffect(() => {
-    // When the Chat page mounts, initialize the socket connection
-    const token = localStorage.getItem('token');
-    if (token) {
-      initializeSocket(token);
-    }
-
-    // Cleanup when leaving the chat page entirely
-    return () => {
-      disconnectSocket();
-    };
-  }, [initializeSocket, disconnectSocket]);
+  const { activeConversation } = useChatStore();
 
   return (
     <div className="h-[calc(100dvh-57px)] sm:h-[calc(100dvh-65px)] flex overflow-hidden w-full relative messageme-tint-bg">

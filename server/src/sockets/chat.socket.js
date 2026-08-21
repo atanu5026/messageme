@@ -1,5 +1,7 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const User = require('../models/User');
+const sendEmail = require('../utils/sendEmail');
 
 module.exports = (io, socket) => {
   // Join a specific conversation room
@@ -58,9 +60,27 @@ module.exports = (io, socket) => {
         )
       ];
       
-      otherReceivers.forEach(id => {
+      // We need sender's name for the email
+      const sender = await User.findById(socket.userId);
+      
+      for (const id of otherReceivers) {
         io.to(id).emit('receive_message', populatedMessage);
-      });
+        
+        // Offline check
+        try {
+          const userObj = await User.findById(id);
+          if (userObj && !userObj.isOnline && userObj.email) {
+            await sendEmail({
+              email: userObj.email,
+              subject: `New message from ${sender?.name || 'someone'}`,
+              message: `You have a new message waiting for you on MessageMe.`,
+              html: `<p>You have a new message from <strong>${sender?.name || 'someone'}</strong> on MessageMe.</p><p><a href="${process.env.FRONTEND_URL || 'http://localhost:5173'}">Log in to view your messages</a></p>`
+            });
+          }
+        } catch (e) {
+          console.error('Error sending offline notification email:', e);
+        }
+      }
 
       // Emit back to sender exactly once
       io.to(socket.userId.toString()).emit('receive_message', populatedMessage);

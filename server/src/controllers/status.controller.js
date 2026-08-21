@@ -42,8 +42,11 @@ const createStatus = async (req, res, next) => {
     // Notify all connected users in real time via Socket.IO
     const io = req.app.get('io');
     if (io) {
-      // Find all connected users who share a conversation with the creator
-      const conversations = await Conversation.find({ participants: req.user._id }).select('participants');
+      // Find all connected users who share an approved conversation with the creator
+      const conversations = await Conversation.find({ 
+        participants: req.user._id,
+        $or: [{ status: 'approved' }, { status: { $exists: false } }]
+      }).select('participants');
       const recipientIds = [
         ...new Set(
           conversations
@@ -81,7 +84,10 @@ const getStatuses = async (req, res, next) => {
     const currentUserId = req.user._id.toString();
 
     // Find all users connected to current user through direct or group conversations
-    const userConversations = await Conversation.find({ participants: req.user._id }).select('participants');
+    const userConversations = await Conversation.find({ 
+      participants: req.user._id,
+      $or: [{ status: 'approved' }, { status: { $exists: false } }]
+    }).select('participants');
     const connectedUserIds = new Set(
       userConversations.flatMap((c) => c.participants.map((p) => p.toString()))
     );
@@ -102,14 +108,13 @@ const getStatuses = async (req, res, next) => {
       // Owner can always see their own statuses
       if (statusOwnerId === currentUserId) return true;
 
+      // Strict requirement: must share an approved conversation to see the status
+      if (!connectedUserIds.has(statusOwnerId)) return false;
+
       const privacy = status.userId.privacySettings?.status || 'everyone';
       if (privacy === 'nobody') return false;
 
-      // If privacy is 'contacts' or 'everyone', show if connected or visible
-      if (privacy === 'everyone') return true;
-      if (privacy === 'contacts') return connectedUserIds.has(statusOwnerId);
-
-      return connectedUserIds.has(statusOwnerId);
+      return true;
     });
 
     // Group statuses by user

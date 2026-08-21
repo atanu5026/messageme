@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import useThemeStore, { ACCENT_COLORS } from '../store/useThemeStore';
 import { useNavigate } from 'react-router-dom';
+import QRScannerModal from '../components/chat/QRScannerModal';
 
 const Settings = () => {
   const { user, updatePassword, updatePrivacySettings, logout, isLoading, error } = useAuthStore();
@@ -11,6 +12,7 @@ const Settings = () => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [showQRScanner, setShowQRScanner] = useState(false);
   
   const [lastSeen, setLastSeen] = useState(user?.privacySettings?.lastSeen || 'everyone');
   const [statusPrivacy, setStatusPrivacy] = useState(user?.privacySettings?.status || 'everyone');
@@ -74,6 +76,7 @@ const Settings = () => {
     { id: 'notifications', label: 'Notifications', icon: '🔔', description: 'System alerts & permissions' },
     { id: 'privacy', label: 'Privacy & Visibility', icon: '🛡️', description: 'Last seen & story permissions' },
     { id: 'security', label: 'Account & Security', icon: '🔒', description: 'Password & credentials' },
+    { id: 'devices', label: 'Linked Devices', icon: '📱', description: 'Link to mobile app using QR code' },
     { id: 'about', label: 'About MessageMe', icon: 'ℹ️', description: 'Encryption, version & developer info' },
   ];
 
@@ -459,7 +462,39 @@ const Settings = () => {
             </div>
           )}
 
-          {/* TAB 5: About MessageMe */}
+          {/* TAB 5: Linked Devices */}
+          {activeTab === 'devices' && (
+            <div className="glass-card p-6 sm:p-8 rounded-3xl border border-black/[0.06] dark:border-white/[0.08] shadow-sm space-y-6 animate-fade-in">
+              <div className="border-b border-black/[0.06] dark:border-white/[0.08] pb-4">
+                <h2 className="text-lg font-bold text-[#1c1c1e] dark:text-[#f5f5f7] flex items-center space-x-2">
+                  <span>📱</span>
+                  <span>Linked Devices</span>
+                </h2>
+                <p className="text-xs text-[#8e8e93] mt-0.5">Connect and sync with the MessageMe mobile app</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.06] dark:border-white/[0.08]">
+                  <h4 className="font-bold text-accent mb-2">Link your mobile device</h4>
+                  <p className="text-xs text-[#8e8e93] leading-relaxed mb-4">
+                    Open the MessageMe app on your phone, navigate to settings, and use the QR Scanner. Once you scan the code shown on your phone with this laptop camera, your devices will be securely paired.
+                  </p>
+                  
+                  <button 
+                    onClick={() => setShowQRScanner(true)}
+                    className="py-2.5 px-6 bg-accent hover-bg-accent text-white font-semibold rounded-full text-xs shadow-accent transition-all flex items-center space-x-2"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5A1.125 1.125 0 0113.5 9.375v-4.5zM6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75h-.75v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75h-.75v-.75z" />
+                    </svg>
+                    <span>Scan QR Code</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 6: About MessageMe */}
           {activeTab === 'about' && (
             <div className="glass-card p-6 sm:p-8 rounded-3xl border border-black/[0.06] dark:border-white/[0.08] shadow-sm space-y-6 animate-fade-in">
               <div className="border-b border-black/[0.06] dark:border-white/[0.08] pb-4">
@@ -576,6 +611,11 @@ const Settings = () => {
           </div>
         </div>
       )}
+
+      <QRScannerModal
+        isOpen={showQRScanner}
+        onClose={() => setShowQRScanner(false)}
+      />
     </div>
   );
 };

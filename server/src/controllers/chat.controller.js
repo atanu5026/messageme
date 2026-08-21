@@ -1,6 +1,7 @@
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const sendEmail = require('../utils/sendEmail');
 
 // @desc    Get all conversations for the logged in user
 // @route   GET /api/chat/conversations
@@ -52,12 +53,105 @@ const createOrGetConversation = async (req, res, next) => {
     const newConversation = await Conversation.create({
       type: 'direct',
       participants: [req.user._id, receiverId],
+      status: 'pending',
+      initiatedBy: req.user._id,
     });
 
     const populatedConversation = await Conversation.findById(newConversation._id)
       .populate('participants', 'name email phoneNumber profilePicture isOnline lastSeen publicKey');
 
+    // Send email notification to receiver if offline
+    const receiver = populatedConversation.participants.find(p => p._id.toString() === receiverId);
+    if (receiver && !receiver.isOnline && receiver.email) {
+      try {
+        await sendEmail({
+          email: receiver.email,
+          subject: 'New Connection Request',
+          message: `${req.user.name} wants to connect with you on MessageMe. Log in to approve their request!`,
+          html: `<p><strong>${req.user.name}</strong> wants to connect with you on MessageMe.</p><p>Log in to approve their request and start chatting!</p>`
+        });
+      } catch (err) {
+        console.error('Email sending failed:', err);
+      }
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.to(receiverId.toString()).emit('connection_request_received', populatedConversation);
+    }
+
     res.status(201).json({ success: true, data: populatedConversation });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Approve a conversation request
+// @route   PUT /api/chat/conversations/:id/approve
+// @access  Private
+const approveConversation = async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.id,
+      participants: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    // Only the receiver can approve
+    if (conversation.initiatedBy && conversation.initiatedBy.toString() === req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'You cannot approve a request you initiated' });
+    }
+
+    conversation.status = 'approved';
+    await conversation.save();
+
+    const populated = await Conversation.findById(conversation._id).populate('participants', 'name email phoneNumber profilePicture isOnline lastSeen publicKey');
+    
+    const io = req.app.get('io');
+    if (io && conversation.initiatedBy) {
+      io.to(conversation.initiatedBy.toString()).emit('connection_request_approved', populated);
+      io.to(conversation.initiatedBy.toString()).emit('status_feed_changed');
+      io.to(req.user._id.toString()).emit('status_feed_changed');
+    }
+
+    res.status(200).json({ success: true, data: populated });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Reject a conversation request
+// @route   PUT /api/chat/conversations/:id/reject
+// @access  Private
+const rejectConversation = async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.id,
+      participants: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    if (conversation.initiatedBy && conversation.initiatedBy.toString() === req.user._id.toString()) {
+      return res.status(403).json({ success: false, message: 'You cannot reject a request you initiated' });
+    }
+
+    conversation.status = 'rejected';
+    await conversation.save();
+
+    const io = req.app.get('io');
+    if (io && conversation.initiatedBy) {
+      io.to(conversation.initiatedBy.toString()).emit('connection_request_rejected', conversation._id);
+      io.to(conversation.initiatedBy.toString()).emit('status_feed_changed');
+      io.to(req.user._id.toString()).emit('status_feed_changed');
+    }
+
+    res.status(200).json({ success: true, message: 'Request rejected' });
   } catch (error) {
     next(error);
   }
@@ -375,9 +469,83 @@ const toggleMuteConversation = async (req, res, next) => {
   }
 };
 
+// @desc    Toggle favorite conversation for user
+// @route   PUT /api/chat/conversations/:id/favorite
+// @access  Private
+const toggleFavoriteConversation = async (req, res, next) => {
+  try {
+    const conversationId = req.params.id;
+    const conversation = await Conversation.findById(conversationId);
+    
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    const isFavorited = conversation.favoritedBy?.some(id => id.toString() === req.user._id.toString());
+    if (isFavorited) {
+      conversation.favoritedBy = conversation.favoritedBy.filter(id => id.toString() !== req.user._id.toString());
+    } else {
+      if (!conversation.favoritedBy) conversation.favoritedBy = [];
+      conversation.favoritedBy.push(req.user._id);
+    }
+
+    await conversation.save();
+
+    // Notify via sockets
+    const io = req.app.get('io');
+    if (io) {
+      // we only need to emit to the user who toggled it so their other sessions sync
+      io.to(req.user._id.toString()).emit('conversation_favorited', conversation._id, !isFavorited);
+    }
+
+    res.status(200).json({ success: true, isFavorited: !isFavorited, data: conversation });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// @desc    Delete a conversation
+// @route   DELETE /api/chat/conversations/:id
+// @access  Private
+const deleteConversation = async (req, res, next) => {
+  try {
+    const conversation = await Conversation.findOne({
+      _id: req.params.id,
+      participants: req.user._id,
+    });
+
+    if (!conversation) {
+      return res.status(404).json({ success: false, message: 'Conversation not found' });
+    }
+
+    // Delete all messages in the conversation
+    await Message.deleteMany({ conversationId: conversation._id });
+
+    // Delete the conversation itself
+    await Conversation.findByIdAndDelete(conversation._id);
+
+    // Notify via sockets if needed
+    const io = req.app.get('io');
+    if (io) {
+      const otherParticipants = conversation.participants.filter(p => p.toString() !== req.user._id.toString());
+      otherParticipants.forEach(pId => {
+        io.to(pId.toString()).emit('conversation_deleted', conversation._id);
+        io.to(pId.toString()).emit('status_feed_changed');
+      });
+      io.to(req.user._id.toString()).emit('status_feed_changed');
+    }
+
+    res.status(200).json({ success: true, message: 'Conversation deleted' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 module.exports = {
   getConversations,
   createOrGetConversation,
+  approveConversation,
+  rejectConversation,
   getMessages,
   searchUsers,
   sendImageMessage,
@@ -386,4 +554,6 @@ module.exports = {
   updateDisappearingMessages,
   togglePinConversation,
   toggleMuteConversation,
+  toggleFavoriteConversation,
+  deleteConversation,
 };
