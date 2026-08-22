@@ -1,7 +1,9 @@
 const Conversation = require('../models/Conversation');
 const Message = require('../models/Message');
 const User = require('../models/User');
+const Notification = require('../models/Notification');
 const sendEmail = require('../utils/sendEmail');
+const { sendPushNotification } = require('../services/push.service');
 
 // @desc    Get all conversations for the logged in user
 // @route   GET /api/chat/conversations
@@ -60,24 +62,49 @@ const createOrGetConversation = async (req, res, next) => {
     const populatedConversation = await Conversation.findById(newConversation._id)
       .populate('participants', 'name email phoneNumber profilePicture isOnline lastSeen publicKey');
 
-    // Send email notification to receiver if offline
     const receiver = populatedConversation.participants.find(p => p._id.toString() === receiverId);
-    if (receiver && !receiver.isOnline && receiver.email) {
+    if (receiver) {
       try {
-        await sendEmail({
-          email: receiver.email,
-          subject: 'New Connection Request',
-          message: `${req.user.name} wants to connect with you on MessageMe. Log in to approve their request!`,
-          html: `<p><strong>${req.user.name}</strong> wants to connect with you on MessageMe.</p><p>Log in to approve their request and start chatting!</p>`
+        // 1. Create Notification Record
+        const notification = await Notification.create({
+          recipient: receiverId,
+          sender: req.user._id,
+          type: 'CONNECTION_REQUEST',
+          title: 'New Connection Request',
+          body: `${req.user.name} sent you a connection request.`,
+          conversation: newConversation._id,
         });
-      } catch (err) {
-        console.error('Email sending failed:', err);
-      }
-    }
 
-    const io = req.app.get('io');
-    if (io) {
-      io.to(receiverId.toString()).emit('connection_request_received', populatedConversation);
+        const io = req.app.get('io');
+        if (io) {
+          // Emit direct unread count update
+          const unreadCount = await Notification.countDocuments({ recipient: receiverId, isRead: false });
+          io.to(receiverId.toString()).emit('notification:unread-count', unreadCount);
+          // Also emit the notification object
+          io.to(receiverId.toString()).emit('notification:new', await notification.populate('sender', 'name profilePicture'));
+          // Existing event
+          io.to(receiverId.toString()).emit('connection_request_received', populatedConversation);
+        }
+
+        // 2. Send Push Notification
+        await sendPushNotification(receiverId, {
+          type: 'CONNECTION_REQUEST',
+          title: 'New Connection Request',
+          body: `${req.user.name} sent you a connection request.`
+        });
+
+        // 3. Fallback Email Notification
+        if (!receiver.isOnline && receiver.email) {
+          await sendEmail({
+            email: receiver.email,
+            subject: 'New Connection Request',
+            message: `${req.user.name} wants to connect with you on MessageMe. Log in to approve their request!`,
+            html: `<p><strong>${req.user.name}</strong> wants to connect with you on MessageMe.</p><p>Log in to approve their request and start chatting!</p>`
+          });
+        }
+      } catch (err) {
+        console.error('Notification failed:', err);
+      }
     }
 
     res.status(201).json({ success: true, data: populatedConversation });
@@ -110,11 +137,38 @@ const approveConversation = async (req, res, next) => {
 
     const populated = await Conversation.findById(conversation._id).populate('participants', 'name email phoneNumber profilePicture isOnline lastSeen publicKey');
     
-    const io = req.app.get('io');
-    if (io && conversation.initiatedBy) {
-      io.to(conversation.initiatedBy.toString()).emit('connection_request_approved', populated);
-      io.to(conversation.initiatedBy.toString()).emit('status_feed_changed');
-      io.to(req.user._id.toString()).emit('status_feed_changed');
+    if (conversation.initiatedBy) {
+      const initiatorId = conversation.initiatedBy.toString();
+      
+      // Create Notification Record
+      const notification = await Notification.create({
+        recipient: initiatorId,
+        sender: req.user._id,
+        type: 'CONNECTION_ACCEPTED',
+        title: 'Connection Accepted',
+        body: `${req.user.name} accepted your connection request.`,
+        conversation: conversation._id,
+      });
+
+      const io = req.app.get('io');
+      if (io) {
+        // Emit direct unread count update
+        const unreadCount = await Notification.countDocuments({ recipient: initiatorId, isRead: false });
+        io.to(initiatorId).emit('notification:unread-count', unreadCount);
+        // Also emit the notification object
+        io.to(initiatorId).emit('notification:new', await notification.populate('sender', 'name profilePicture'));
+        // Existing events
+        io.to(initiatorId).emit('connection_request_approved', populated);
+        io.to(initiatorId).emit('status_feed_changed');
+        io.to(req.user._id.toString()).emit('status_feed_changed');
+      }
+
+      // Send Push Notification
+      await sendPushNotification(initiatorId, {
+        type: 'CONNECTION_ACCEPTED',
+        title: 'Connection Accepted',
+        body: `${req.user.name} accepted your connection request.`
+      });
     }
 
     res.status(200).json({ success: true, data: populated });
@@ -165,11 +219,11 @@ const getMessages = async (req, res, next) => {
     const { conversationId } = req.params;
 
     // Verify user is a participant
-    const conversation = await Conversation.findById(conversationId);
+    const conversation = await Conversation.findById(conversationId).populate('participants', 'name email profilePicture publicKey');
     if (!conversation) {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
-    if (!conversation.participants.includes(req.user._id)) {
+    if (!conversation.participants.some(p => p._id.toString() === req.user._id.toString())) {
       return res.status(403).json({ success: false, message: 'Not authorized to view these messages' });
     }
 
@@ -203,6 +257,7 @@ const getMessages = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: messages,
+      conversation: conversation
     });
   } catch (error) {
     next(error);
@@ -449,21 +504,56 @@ const togglePinConversation = async (req, res, next) => {
 const toggleMuteConversation = async (req, res, next) => {
   try {
     const conversationId = req.params.id;
+    const { level } = req.body; // e.g., '1_hour', '8_hours', '1_week', 'always'
     const conversation = await Conversation.findById(conversationId);
     
     if (!conversation) {
       return res.status(404).json({ success: false, message: 'Conversation not found' });
     }
 
-    const isMuted = conversation.mutedBy.some(id => id.toString() === req.user._id.toString());
-    if (isMuted) {
-      conversation.mutedBy = conversation.mutedBy.filter(id => id.toString() !== req.user._id.toString());
+    const userId = req.user._id.toString();
+    const isCurrentlyMuted = conversation.mutedBy.some(id => id.toString() === userId);
+
+    if (isCurrentlyMuted && !level) {
+      // Unmute: remove from mutedBy and muteSettings
+      conversation.mutedBy = conversation.mutedBy.filter(id => id.toString() !== userId);
+      conversation.muteSettings = conversation.muteSettings.filter(s => s.user.toString() !== userId);
     } else {
-      conversation.mutedBy.push(req.user._id);
+      // Mute: add to mutedBy and update muteSettings
+      if (!isCurrentlyMuted) {
+        conversation.mutedBy.push(req.user._id);
+      }
+      
+      const muteLevel = level || 'always';
+      let mutedUntil = null;
+      const now = new Date();
+      
+      if (muteLevel === '1_hour') {
+        mutedUntil = new Date(now.getTime() + 60 * 60 * 1000);
+      } else if (muteLevel === '8_hours') {
+        mutedUntil = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+      } else if (muteLevel === '1_week') {
+        mutedUntil = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+      }
+
+      // Update or add muteSettings
+      const existingSettingIndex = conversation.muteSettings.findIndex(s => s.user.toString() === userId);
+      if (existingSettingIndex >= 0) {
+        conversation.muteSettings[existingSettingIndex].level = muteLevel;
+        conversation.muteSettings[existingSettingIndex].mutedUntil = mutedUntil;
+      } else {
+        conversation.muteSettings.push({
+          user: req.user._id,
+          level: muteLevel,
+          mutedUntil: mutedUntil
+        });
+      }
     }
 
     await conversation.save();
-    res.status(200).json({ success: true, isMuted: !isMuted, data: conversation });
+    
+    const isMutedNow = conversation.mutedBy.some(id => id.toString() === userId);
+    res.status(200).json({ success: true, isMuted: isMutedNow, data: conversation });
   } catch (error) {
     next(error);
   }

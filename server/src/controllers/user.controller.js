@@ -141,6 +141,35 @@ const updatePrivacySettings = async (req, res, next) => {
     next(error);
   }
 };
+// @desc    Update notification settings
+// @route   PUT /api/users/notifications
+// @access  Private
+const updateNotificationSettings = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (user) {
+      if (req.body.notificationSettings) {
+        user.notificationSettings = {
+          ...user.notificationSettings,
+          ...req.body.notificationSettings
+        };
+      }
+
+      const updatedUser = await user.save();
+
+      res.status(200).json({
+        success: true,
+        message: 'Notification settings updated successfully',
+        data: updatedUser,
+      });
+    } else {
+      res.status(404).json({ success: false, message: 'User not found' });
+    }
+  } catch (error) {
+    next(error);
+  }
+};
 
 // @desc    Toggle block/unblock a user
 // @route   PUT /api/users/block/:id
@@ -188,5 +217,6 @@ module.exports = {
   updateAbout,
   updatePassword,
   updatePrivacySettings,
+  updateNotificationSettings,
   toggleBlockUser,
 };

@@ -8,12 +8,14 @@ const useCallStore = create((set, get) => ({
   peerConnection: null,
   
   callStatus: 'idle', // idle | ringing | active
-  incomingCall: null, // { from: userId, name: string, signal: SDP }
+  incomingCall: null, // { from: userId, name: string, signal: SDP, callType: 'video'|'audio' }
   otherUserId: null,  // The person we are calling or talking to
+  callType: 'video',  // 'video' | 'audio'
 
   isMuted: false,
   isVideoOff: false,
   isScreenSharing: false,
+  callStartTime: null,
   pendingIceCandidates: [], // Cache for ICE candidates that arrive too early
 
   // Initialize Socket listeners for Calls
@@ -27,11 +29,13 @@ const useCallStore = create((set, get) => ({
     socket.off('ice_candidate');
     socket.off('call_ended');
 
-    socket.on('call_user', async ({ signal, from, name }) => {
+    socket.on('call_user', async ({ signal, from, name, callType = 'video' }) => {
       set({
-        incomingCall: { from, name, signal },
+        incomingCall: { from, name, signal, callType },
         callStatus: 'ringing',
         otherUserId: from,
+        callType: callType,
+        callStartTime: null,
         pendingIceCandidates: [] // reset on new call
       });
     });
@@ -41,34 +45,59 @@ const useCallStore = create((set, get) => ({
       if (pc) {
         await pc.setRemoteDescription(new RTCSessionDescription(signal));
         
-        // Apply any ICE candidates that arrived before we got the answer
+        set({ callStatus: 'active', callStartTime: Date.now() });
+
+        // Add any cached ICE candidates now that remote description is set
         const { pendingIceCandidates } = get();
         for (const candidate of pendingIceCandidates) {
-          pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error(e));
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (e) {
+            console.error('Error adding cached ice candidate', e);
+          }
         }
-        set({ callStatus: 'active', pendingIceCandidates: [] });
+        set({ pendingIceCandidates: [] });
       }
     });
 
-    socket.on('ice_candidate', (candidate) => {
+    socket.on('ice_candidate', async (candidate) => {
       const pc = get().peerConnection;
-      if (pc && pc.remoteDescription) {
-        pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error(e));
-      } else {
-        // Cache them if pc is not ready or remoteDescription is not set
-        set({ pendingIceCandidates: [...get().pendingIceCandidates, candidate] });
+      if (pc) {
+        if (pc.remoteDescription) {
+          try {
+            await pc.addIceCandidate(new RTCIceCandidate(candidate));
+          } catch (e) {
+            console.error('Error adding ice candidate', e);
+          }
+        } else {
+          set(state => ({ pendingIceCandidates: [...state.pendingIceCandidates, candidate] }));
+        }
       }
     });
 
     socket.on('call_ended', () => {
-      get().endCall(false); // false means don't emit end_call again
+      get().endCall(false); // end call without emitting to other user
     });
   },
 
-  // Setup media and create a PeerConnection
-  setupWebRTC: async (isCaller, remoteUserId) => {
+  // Setup WebRTC and local media
+  setupWebRTC: async (isCaller, remoteUserId, callType = 'video') => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      let stream;
+      if (callType === 'audio') {
+        stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        set({ isVideoOff: true });
+      } else {
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+          set({ isVideoOff: false });
+        } catch (err) {
+          console.warn('Could not access camera, falling back to audio only', err);
+          stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+          set({ isVideoOff: true });
+        }
+      }
+
       set({ localStream: stream, otherUserId: remoteUserId });
 
       const pc = new RTCPeerConnection({
@@ -78,24 +107,22 @@ const useCallStore = create((set, get) => ({
         ]
       });
 
+      // Handle receiving remote stream
+      pc.ontrack = (event) => {
+        set({ remoteStream: event.streams[0] });
+      };
+
       // Add local tracks to peer connection
       stream.getTracks().forEach(track => {
         pc.addTrack(track, stream);
       });
-
-      // Handle remote stream
-      pc.ontrack = (event) => {
-        if (event.streams && event.streams[0]) {
-          set({ remoteStream: event.streams[0] });
-        }
-      };
 
       // Handle ICE candidates
       const socket = useChatStore.getState().socket;
       pc.onicecandidate = (event) => {
         if (event.candidate && socket) {
           socket.emit('ice_candidate', {
-            to: get().otherUserId,
+            to: remoteUserId,
             candidate: event.candidate
           });
         }
@@ -105,19 +132,19 @@ const useCallStore = create((set, get) => ({
       return pc;
     } catch (error) {
       console.error('Error accessing media devices:', error);
-      alert('Could not access camera/microphone. Please allow permissions.');
+      alert('Could not access camera/microphone. Please allow permissions or connect a microphone.');
       return null;
     }
   },
 
-  // Initiate a call to another user
-  callUser: async (userId, _userName) => {
+  callUser: async (userId, _userName, callType = 'video') => {
     const socket = useChatStore.getState().socket;
     if (!socket) return;
 
-    set({ callStatus: 'active', otherUserId: userId, pendingIceCandidates: [] });
+    const myId = useAuthStore.getState().user._id;
+    set({ callStatus: 'active', otherUserId: userId, callType, pendingIceCandidates: [], callStartTime: null, callerId: myId });
     
-    const pc = await get().setupWebRTC(true, userId);
+    const pc = await get().setupWebRTC(true, userId, callType);
     if (!pc) {
       set({ callStatus: 'idle', otherUserId: null });
       return;
@@ -130,7 +157,8 @@ const useCallStore = create((set, get) => ({
       userToCall: userId,
       signalData: offer,
       from: useAuthStore.getState().user._id,
-      name: useAuthStore.getState().user.name
+      name: useAuthStore.getState().user.name,
+      callType: callType
     });
   },
 
@@ -140,20 +168,12 @@ const useCallStore = create((set, get) => ({
     const { incomingCall } = get();
     if (!socket || !incomingCall) return;
 
-    set({ callStatus: 'active' });
+    set({ callStatus: 'active', callStartTime: Date.now(), callerId: incomingCall.from });
 
-    const pc = await get().setupWebRTC(false, incomingCall.from);
+    const pc = await get().setupWebRTC(false, incomingCall.from, incomingCall.callType || 'video');
     if (!pc) return;
 
     await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.signal));
-    
-    // Apply pending ICE candidates now that remoteDescription is set
-    const { pendingIceCandidates } = get();
-    for (const candidate of pendingIceCandidates) {
-      pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error(e));
-    }
-    set({ pendingIceCandidates: [] });
-    
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 
@@ -161,13 +181,11 @@ const useCallStore = create((set, get) => ({
       to: incomingCall.from,
       signal: answer
     });
-
-    set({ incomingCall: null });
   },
 
-  // Reject or End a call
+  // End call
   endCall: (emitToOther = true) => {
-    const { peerConnection, localStream, otherUserId } = get();
+    const { localStream, peerConnection, otherUserId, callStartTime, callType, callStatus } = get();
     const socket = useChatStore.getState().socket;
 
     if (peerConnection) {
@@ -179,7 +197,11 @@ const useCallStore = create((set, get) => ({
     }
 
     if (emitToOther && socket && otherUserId) {
-      socket.emit('end_call', { to: otherUserId });
+      let duration;
+      if (callStartTime && callStatus === 'active') {
+        duration = Math.floor((Date.now() - callStartTime) / 1000);
+      }
+      socket.emit('end_call', { to: otherUserId, duration, callType, callerId: get().callerId });
     }
 
     set({
@@ -191,7 +213,9 @@ const useCallStore = create((set, get) => ({
       otherUserId: null,
       isMuted: false,
       isVideoOff: false,
-      pendingIceCandidates: []
+      pendingIceCandidates: [],
+      callStartTime: null,
+      callerId: null
     });
   },
 
@@ -199,7 +223,10 @@ const useCallStore = create((set, get) => ({
   toggleMute: () => {
     const { localStream, isMuted } = get();
     if (localStream) {
-      localStream.getAudioTracks()[0].enabled = isMuted; // If currently muted, we want to enable (unmute)
+      const audioTrack = localStream.getAudioTracks()[0];
+      if (audioTrack) {
+        audioTrack.enabled = isMuted; // If currently muted, we want to enable (unmute)
+      }
       set({ isMuted: !isMuted });
     }
   },
@@ -207,7 +234,10 @@ const useCallStore = create((set, get) => ({
   toggleVideo: () => {
     const { localStream, isVideoOff } = get();
     if (localStream) {
-      localStream.getVideoTracks()[0].enabled = isVideoOff; 
+      const videoTrack = localStream.getVideoTracks()[0];
+      if (videoTrack) {
+        videoTrack.enabled = isVideoOff; 
+      }
       set({ isVideoOff: !isVideoOff });
     }
   },
@@ -223,7 +253,7 @@ const useCallStore = create((set, get) => ({
         const videoTrack = userStream.getVideoTracks()[0];
         
         // Find the video sender and replace track
-        const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+        const sender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
         if (sender) {
           sender.replaceTrack(videoTrack);
         }
@@ -245,7 +275,7 @@ const useCallStore = create((set, get) => ({
           get().toggleScreenShare(); // revert to camera
         };
 
-        const sender = peerConnection.getSenders().find(s => s.track.kind === 'video');
+        const sender = peerConnection.getSenders().find(s => s.track?.kind === 'video');
         if (sender) {
           sender.replaceTrack(screenTrack);
         }

@@ -185,41 +185,54 @@ const useAuthStore = create((set, get) => ({
   },
 
   updateAbout: async (about) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
       const res = await api.put('/users/about', { about });
       if (res.data.success) {
-        set({ user: res.data.data, isLoading: false });
+        set({ user: res.data.data });
         return true;
       }
     } catch (error) {
-      set({ error: error.response?.data?.message || 'Update failed', isLoading: false });
+      set({ error: error.response?.data?.message || 'Update failed' });
       return false;
     }
   },
 
   updatePassword: async (currentPassword, newPassword) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
       const res = await api.put('/users/password', { currentPassword, newPassword });
-      set({ isLoading: false });
       return res.data.success;
     } catch (error) {
-      set({ error: error.response?.data?.message || 'Update failed', isLoading: false });
+      set({ error: error.response?.data?.message || 'Update failed' });
       return false;
     }
   },
 
   updatePrivacySettings: async (lastSeen, status) => {
-    set({ isLoading: true, error: null });
+    set({ error: null });
     try {
       const res = await api.put('/users/privacy', { lastSeen, status });
       if (res.data.success) {
-        set({ user: res.data.data, isLoading: false });
+        set({ user: res.data.data });
         return true;
       }
     } catch (error) {
-      set({ error: error.response?.data?.message || 'Privacy update failed', isLoading: false });
+      set({ error: error.response?.data?.message || 'Privacy update failed' });
+      return false;
+    }
+  },
+
+  updateNotificationSettings: async (settings) => {
+    set({ error: null });
+    try {
+      const res = await api.put('/users/profile', { notificationSettings: settings });
+      if (res.data.success) {
+        set({ user: res.data.data });
+        return true;
+      }
+    } catch (error) {
+      set({ error: error.response?.data?.message || 'Update failed' });
       return false;
     }
   },

@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
+import { useNotificationStore } from '../../store/useNotificationStore';
 import CreateGroupModal from './CreateGroupModal';
+import NotificationCenter from '../notifications/NotificationCenter';
 import StatusRow from '../status/StatusRow';
 import api from '../../services/api';
 
@@ -18,21 +20,26 @@ const Sidebar = () => {
     toggleFavoriteConversation,
     typingUsers
   } = useChatStore();
-  const { logout, user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   
+  const { unreadCount, fetchUnreadCount } = useNotificationStore();
+
   const [filterCategory, setFilterCategory] = useState('all'); // 'all', 'unread', 'favorites'
   
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
+  
   const [notifPermission, setNotifPermission] = useState(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted'
   );
 
   useEffect(() => {
     fetchConversations();
-  }, [fetchConversations]);
+    fetchUnreadCount();
+  }, [fetchConversations, fetchUnreadCount]);
 
   useEffect(() => {
     const handleSearch = async () => {
@@ -295,6 +302,22 @@ const Sidebar = () => {
         
         <div className="flex items-center space-x-2">
           <button 
+            onClick={() => setShowNotifications(true)}
+            className="relative p-2 rounded-full glass-card hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-accent transition-all"
+            title="Notifications"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.2} stroke="currentColor" className="w-4 h-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+            </svg>
+            {unreadCount > 0 && (
+              <span className="absolute top-1 right-1 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+              </span>
+            )}
+          </button>
+
+          <button 
             onClick={() => setShowCreateGroup(true)}
             className="p-2 rounded-full glass-card hover:bg-black/[0.06] dark:hover:bg-white/[0.1] text-accent transition-all"
             title="New Group"
@@ -312,6 +335,12 @@ const Sidebar = () => {
           </button>
         </div>
       </div>
+
+      {showNotifications && (
+        <div className="absolute inset-0 z-50 bg-black/40 dark:bg-black/60 backdrop-blur-xl animate-fade-in flex flex-col shadow-2xl border-r border-black/[0.06] dark:border-white/[0.08]">
+          <NotificationCenter onClose={() => setShowNotifications(false)} />
+        </div>
+      )}
 
       {/* Notification Banner if permission not granted */}
       {notifPermission === 'default' && (

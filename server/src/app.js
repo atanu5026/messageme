@@ -54,12 +54,14 @@ const authRoutes = require('./routes/auth.routes');
 const userRoutes = require('./routes/user.routes');
 const chatRoutes = require('./routes/chat.routes');
 const statusRoutes = require('./routes/status.routes');
+const notificationRoutes = require('./routes/notification.routes');
 
 app.use('/api/health', healthRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/status', statusRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // 404 handler
 app.use((req, res, next) => {

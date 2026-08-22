@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import useChatStore from '../../store/useChatStore';
 import useAuthStore from '../../store/useAuthStore';
 
 const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
   const { blockUser, muteConversation, deleteConversation } = useChatStore();
   const { user: currentUser } = useAuthStore();
+
+  const [showMuteOptions, setShowMuteOptions] = useState(false);
 
   if (!isOpen || !conversation) return null;
 
@@ -17,7 +19,16 @@ const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
   const isBlocked = currentUser?.blockedUsers?.some((id) => id.toString() === otherParticipant?._id?.toString());
 
   const handleMuteToggle = () => {
-    muteConversation(conversation._id);
+    if (isMuted) {
+      muteConversation(conversation._id);
+    } else {
+      setShowMuteOptions(true);
+    }
+  };
+
+  const handleConfirmMute = (level) => {
+    muteConversation(conversation._id, level);
+    setShowMuteOptions(false);
   };
 
   const handleBlockToggle = () => {
@@ -144,6 +155,37 @@ const UserProfileDrawer = ({ isOpen, onClose, conversation }) => {
           </button>
         </div>
       </div>
+      {showMuteOptions && (
+        <div className="absolute inset-0 z-[60] bg-black/60 flex items-center justify-center p-4">
+          <div className="glass-card p-6 rounded-3xl space-y-4 max-w-sm w-full animate-fade-in text-center">
+            <h3 className="text-lg font-bold text-[#1c1c1e] dark:text-[#f5f5f7]">Mute Notifications</h3>
+            <p className="text-sm text-[#8e8e93] mb-4">Choose how long you want to mute this conversation.</p>
+            
+            <div className="space-y-2">
+              {[
+                { label: '8 hours', val: '8_hours' },
+                { label: '1 week', val: '1_week' },
+                { label: 'Always', val: 'always' }
+              ].map(opt => (
+                <button
+                  key={opt.val}
+                  onClick={() => handleConfirmMute(opt.val)}
+                  className="w-full py-3 rounded-2xl glass-input text-sm font-semibold hover:bg-black/[0.04] dark:hover:bg-white/[0.06] transition-colors text-[#1c1c1e] dark:text-[#f5f5f7]"
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowMuteOptions(false)}
+              className="w-full py-3 mt-2 rounded-2xl text-sm font-bold text-accent hover:bg-accent/10 transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

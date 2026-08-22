@@ -32,6 +32,21 @@ export default {
           '0%, 100%': { transform: 'translateY(0)' },
           '50%': { transform: 'translateY(-8px)' },
         }
+      },
+      spacing: {
+        'safe-top': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'safe-left': 'env(safe-area-inset-left)',
+        'safe-right': 'env(safe-area-inset-right)',
+      },
+      height: {
+        'dvh': '100dvh',
+      },
+      minHeight: {
+        'dvh': '100dvh',
+      },
+      maxHeight: {
+        'dvh': '100dvh',
       }
     },
   },

@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useAuthStore from '../store/useAuthStore';
 import useThemeStore, { ACCENT_COLORS } from '../store/useThemeStore';
+import { useNotificationStore } from '../store/useNotificationStore';
 import { useNavigate } from 'react-router-dom';
 import QRScannerModal from '../components/chat/QRScannerModal';
 
 const Settings = () => {
-  const { user, updatePassword, updatePrivacySettings, logout, isLoading, error } = useAuthStore();
+  const { user, updatePassword, updatePrivacySettings, updateNotificationSettings, logout, isLoading, error } = useAuthStore();
   const { isDarkMode, toggleDarkMode, accentColor, setAccentColor, accentIntensity, setAccentIntensity } = useThemeStore();
+  const { isSubscribed, subscribeToPush, unsubscribeFromPush } = useNotificationStore();
   
   const [activeTab, setActiveTab] = useState('appearance');
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -17,33 +19,73 @@ const Settings = () => {
   const [lastSeen, setLastSeen] = useState(user?.privacySettings?.lastSeen || 'everyone');
   const [statusPrivacy, setStatusPrivacy] = useState(user?.privacySettings?.status || 'everyone');
   
+  // Local notification settings state based on user model
+  const defaultNotifSettings = {
+    messages: true, connectionRequests: true, connectionApprovals: true,
+    groupMessages: true, mentions: true, reactions: true, calls: true,
+    statusUpdates: true, securityAlerts: true, showPreview: true, sound: true, vibrate: true
+  };
+  const [notifSettings, setNotifSettings] = useState(user?.notificationSettings || defaultNotifSettings);
+
   const navigate = useNavigate();
 
   const [notifPermission, setNotifPermission] = useState(
     typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'granted'
   );
 
+  const [deferredPrompt, setDeferredPrompt] = useState(window.deferredPrompt || null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      window.deferredPrompt = e;
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    
+    // Check if it got set before this effect ran
+    if (window.deferredPrompt) {
+      setDeferredPrompt(window.deferredPrompt);
+    }
+    
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
   const handleRequestNotification = async () => {
     if ('Notification' in window) {
       const perm = await Notification.requestPermission();
       setNotifPermission(perm);
       if (perm === 'granted') {
-        new Notification('MessageMe Notifications Enabled', {
-          body: 'You will now receive desktop notifications for new messages!',
-          icon: '/vite.svg',
-        });
+        subscribeToPush(); // Call the store method to actually subscribe to the server
       }
     }
   };
 
-  const handleTestNotification = () => {
+  const handleTestNotification = async () => {
     if ('Notification' in window && Notification.permission === 'granted') {
-      new Notification('MessageMe Test Notification', {
+      const reg = await navigator.serviceWorker.ready;
+      reg.showNotification('MessageMe Test Notification', {
         body: 'Notifications are working properly on your device.',
-        icon: '/vite.svg',
+        icon: '/pwa-192x192.png',
       });
     } else {
       handleRequestNotification();
+    }
+  };
+
+  const handleToggleNotifSetting = async (key) => {
+    const newSettings = { ...notifSettings, [key]: !notifSettings[key] };
+    setNotifSettings(newSettings);
+    await updateNotificationSettings(newSettings);
+  };
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
     }
   };
 
@@ -73,10 +115,11 @@ const Settings = () => {
   // Extensible Settings Navigation Tabs
   const settingsTabs = [
     { id: 'appearance', label: 'Appearance & Accent', icon: '🎨', description: 'Themes, accent colors & styling' },
-    { id: 'notifications', label: 'Notifications', icon: '🔔', description: 'System alerts & permissions' },
+    { id: 'notifications', label: 'Notifications', icon: '🔔', description: 'System alerts & preferences' },
     { id: 'privacy', label: 'Privacy & Visibility', icon: '🛡️', description: 'Last seen & story permissions' },
     { id: 'security', label: 'Account & Security', icon: '🔒', description: 'Password & credentials' },
     { id: 'devices', label: 'Linked Devices', icon: '📱', description: 'Link to mobile app using QR code' },
+    { id: 'app', label: 'Install App', icon: '⬇️', description: 'Download MessageMe to your device' },
     { id: 'about', label: 'About MessageMe', icon: 'ℹ️', description: 'Encryption, version & developer info' },
   ];
 
@@ -324,27 +367,27 @@ const Settings = () => {
               <div className="border-b border-black/[0.06] dark:border-white/[0.08] pb-4">
                 <h2 className="text-lg font-bold text-[#1c1c1e] dark:text-[#f5f5f7] flex items-center space-x-2">
                   <span>🔔</span>
-                  <span>Desktop Notifications</span>
+                  <span>Notification Settings</span>
                 </h2>
-                <p className="text-xs text-[#8e8e93] mt-0.5">Control message alert banners and Chrome system notifications</p>
+                <p className="text-xs text-[#8e8e93] mt-0.5">Control what you get notified about and how</p>
               </div>
 
               <div className="space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.06] dark:border-white/[0.08]">
                   <div>
-                    <h4 className="text-xs font-bold text-[#1c1c1e] dark:text-[#f5f5f7]">Chrome Push Notifications</h4>
-                    <p className="text-xs text-[#8e8e93]">Receive popups even when tab is in background</p>
+                    <h4 className="text-xs font-bold text-[#1c1c1e] dark:text-[#f5f5f7]">Push Notifications</h4>
+                    <p className="text-xs text-[#8e8e93]">Receive popups even when app is closed</p>
                   </div>
 
                   <div className="flex items-center space-x-3">
                     <span className={`px-2.5 py-0.5 rounded-full font-bold capitalize text-xs border ${
-                      notifPermission === 'granted' ? 'bg-[#34c759]/10 text-[#34c759] border-[#34c759]/20' :
+                      isSubscribed && notifPermission === 'granted' ? 'bg-[#34c759]/10 text-[#34c759] border-[#34c759]/20' :
                       notifPermission === 'denied' ? 'bg-[#ff3b30]/10 text-[#ff3b30] border-[#ff3b30]/20' : 'bg-[#ff9500]/10 text-[#ff9500] border-[#ff9500]/20'
                     }`}>
-                      {notifPermission}
+                      {isSubscribed && notifPermission === 'granted' ? 'Active' : notifPermission}
                     </span>
 
-                    {notifPermission !== 'granted' ? (
+                    {(!isSubscribed || notifPermission !== 'granted') ? (
                       <button
                         onClick={handleRequestNotification}
                         className="py-1.5 px-4 bg-accent hover-bg-accent text-white font-semibold rounded-full text-xs shadow-accent transition-all"
@@ -352,15 +395,61 @@ const Settings = () => {
                         Enable
                       </button>
                     ) : (
-                      <button
-                        onClick={handleTestNotification}
-                        className="py-1.5 px-4 rounded-full bg-black/[0.05] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] text-[#1c1c1e] dark:text-[#f5f5f7] font-semibold text-xs border border-black/[0.06] dark:border-white/[0.08] transition-all"
-                      >
-                        Send Test
-                      </button>
+                      <>
+                        <button
+                          onClick={handleTestNotification}
+                          className="py-1.5 px-4 rounded-full bg-black/[0.05] dark:bg-white/[0.08] hover:bg-black/[0.08] dark:hover:bg-white/[0.12] text-[#1c1c1e] dark:text-[#f5f5f7] font-semibold text-xs border border-black/[0.06] dark:border-white/[0.08] transition-all"
+                        >
+                          Test
+                        </button>
+                        <button
+                          onClick={unsubscribeFromPush}
+                          className="py-1.5 px-4 rounded-full bg-error/10 hover:bg-error/20 text-error font-semibold text-xs border border-error/20 transition-all"
+                        >
+                          Disable
+                        </button>
+                      </>
                     )}
                   </div>
                 </div>
+
+                {/* Preferences Toggles */}
+                <div className="space-y-3 pt-2">
+                  <h3 className="text-[11px] font-bold text-[#8e8e93] uppercase tracking-wider pl-1">Types of Alerts</h3>
+                  
+                  {[
+                    { key: 'messages', label: 'Direct Messages' },
+                    { key: 'groupMessages', label: 'Group Messages' },
+                    { key: 'calls', label: 'Incoming Calls' },
+                    { key: 'connectionRequests', label: 'Connection Requests' },
+                    { key: 'connectionApprovals', label: 'Connection Approvals' },
+                    { key: 'reactions', label: 'Message Reactions' },
+                  ].map(({ key, label }) => (
+                    <div key={key} className="flex items-center justify-between p-3 px-4 rounded-2xl glass-card hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors border border-transparent">
+                      <span className="text-sm font-semibold text-[#1c1c1e] dark:text-[#f5f5f7]">{label}</span>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" className="sr-only peer" checked={notifSettings[key]} onChange={() => handleToggleNotifSetting(key)} />
+                        <div className="w-9 h-5 bg-black/[0.15] dark:bg-white/[0.2] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent shadow-inner"></div>
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="space-y-3 pt-2">
+                  <h3 className="text-[11px] font-bold text-[#8e8e93] uppercase tracking-wider pl-1">Display</h3>
+                  
+                  <div className="flex items-center justify-between p-3 px-4 rounded-2xl glass-card hover:bg-black/[0.02] dark:hover:bg-white/[0.02] transition-colors border border-transparent">
+                    <div>
+                      <span className="text-sm font-semibold text-[#1c1c1e] dark:text-[#f5f5f7] block">Show Previews</span>
+                      <span className="text-xs text-[#8e8e93]">Display message text in notifications</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" className="sr-only peer" checked={notifSettings.showPreview} onChange={() => handleToggleNotifSetting('showPreview')} />
+                      <div className="w-9 h-5 bg-black/[0.15] dark:bg-white/[0.2] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-accent shadow-inner"></div>
+                    </label>
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
@@ -489,6 +578,50 @@ const Settings = () => {
                     </svg>
                     <span>Scan QR Code</span>
                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5.5: Install App */}
+          {activeTab === 'app' && (
+            <div className="glass-card p-6 sm:p-8 rounded-3xl border border-black/[0.06] dark:border-white/[0.08] shadow-sm space-y-6 animate-fade-in">
+              <div className="border-b border-black/[0.06] dark:border-white/[0.08] pb-4">
+                <h2 className="text-lg font-bold text-[#1c1c1e] dark:text-[#f5f5f7] flex items-center space-x-2">
+                  <span>⬇️</span>
+                  <span>Install App</span>
+                </h2>
+                <p className="text-xs text-[#8e8e93] mt-0.5">Install MessageMe as a standalone application on your device</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/[0.06] dark:border-white/[0.08] flex flex-col items-center justify-center text-center py-8">
+                  <div className="w-20 h-20 bg-accent-tint text-accent rounded-3xl flex items-center justify-center mb-4 shadow-lg border border-accent/20">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-10 h-10">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                    </svg>
+                  </div>
+                  
+                  <h4 className="font-bold text-[#1c1c1e] dark:text-[#f5f5f7] mb-2 text-lg">Install MessageMe Desktop</h4>
+                  <p className="text-xs text-[#8e8e93] max-w-sm mb-6">
+                    Get the fast, seamless standalone app experience on your device. Works offline and launches instantly from your dock or home screen.
+                  </p>
+
+                  {deferredPrompt ? (
+                    <button 
+                      onClick={handleInstallApp}
+                      className="py-3 px-8 bg-accent hover-bg-accent text-white font-bold rounded-full shadow-accent transition-all hover:scale-105 active:scale-95"
+                    >
+                      Install App Now
+                    </button>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 text-[#8e8e93]">
+                      <span className="px-4 py-2 rounded-full bg-[#34c759]/10 text-[#34c759] font-bold text-xs">
+                        App is Already Installed or Not Supported
+                      </span>
+                      <p className="text-[10px]">If you're in a browser, look for the install icon in the address bar.</p>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,3 +1,4 @@
+// nodemon restart trigger  
 const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const app = require('./app');
@@ -38,3 +39,4 @@ process.on('unhandledRejection', (err, promise) => {
   // Close server & exit process
   server.close(() => process.exit(1));
 });
+

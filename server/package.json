@@ -27,6 +27,7 @@
     "multer-storage-cloudinary": "^4.0.0",
     "nodemailer": "^9.0.5",
     "socket.io": "^4.8.3",
+    "web-push": "^3.6.7",
     "xss-clean": "^0.1.4"
   },
   "devDependencies": {

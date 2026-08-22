@@ -21,7 +21,7 @@ const decryptDirectMessage = async (content, otherPublicKey, privateKeyString) =
     return await decryptPayload(sharedKey, content);
   } catch (err) {
     console.error('Failed to decrypt direct message:', err);
-    return content;
+    return '🔒 [This message could not be decrypted]';
   }
 };
 
@@ -54,6 +54,7 @@ const useChatStore = create(
   replyingToMessage: null,
   editingMessage: null,
   pinnedConversationIds: JSON.parse(localStorage.getItem('pinned_convos') || '[]'),
+  offlineQueue: [],
 
   setReplyingToMessage: (message) => set({ replyingToMessage: message }),
   setEditingMessage: (message) => set({ editingMessage: message }),
@@ -69,6 +70,7 @@ const useChatStore = create(
 
     socket.on('connect', () => {
       console.log('Socket connected:', socket.id);
+      get().syncOfflineMessages();
     });
 
     // Real-time events
@@ -534,14 +536,16 @@ const useChatStore = create(
     }
   },
 
-  muteConversation: async (conversationId) => {
+  muteConversation: async (conversationId, level = null) => {
     try {
-      const res = await api.put(`/chat/conversations/${conversationId}/mute`);
+      const payload = level ? { level } : {};
+      const res = await api.put(`/chat/conversations/${conversationId}/mute`, payload);
       if (res.data.success) {
         set((state) => ({
           activeConversation: state.activeConversation?._id === conversationId 
-            ? { ...state.activeConversation, mutedBy: res.data.data.mutedBy } 
-            : state.activeConversation
+            ? { ...state.activeConversation, mutedBy: res.data.data.mutedBy, muteSettings: res.data.data.muteSettings } 
+            : state.activeConversation,
+          conversations: state.conversations.map(c => c._id === conversationId ? { ...c, mutedBy: res.data.data.mutedBy, muteSettings: res.data.data.muteSettings } : c)
         }));
         toast.success(res.data.isMuted ? 'Conversation muted' : 'Conversation unmuted');
       }
@@ -653,7 +657,7 @@ const useChatStore = create(
     try {
       const res = await api.get(`/chat/messages/${conversationId}`);
       if (res.data.success) {
-        const conversation = get().conversations.find(c => c._id === conversationId) || get().activeConversation;
+        const conversation = res.data.conversation || get().conversations.find(c => c._id === conversationId) || get().activeConversation;
         let messages = res.data.data;
         const currentUserId = useAuthStore.getState().user?._id;
         
@@ -816,14 +820,23 @@ const useChatStore = create(
       }
     }
 
-    socket.emit('send_message', {
+    const messagePayload = {
       conversationId: activeConversation._id,
       receiverIds,
       content: finalContent,
       type,
       metadata,
       replyTo: replyingToMessage?._id || null,
-    });
+    };
+
+    if (!navigator.onLine) {
+      set((state) => ({
+        offlineQueue: [...state.offlineQueue, messagePayload]
+      }));
+      toast.success('Message queued for offline sending');
+    } else {
+      socket.emit('send_message', messagePayload);
+    }
 
     set({ replyingToMessage: null });
   },
@@ -982,6 +995,18 @@ const useChatStore = create(
         receiverIds: receivers
       });
     }
+  },
+
+  syncOfflineMessages: () => {
+    const { offlineQueue, socket } = get();
+    if (offlineQueue.length === 0 || !socket || !navigator.onLine) return;
+
+    offlineQueue.forEach((msg) => {
+      socket.emit('send_message', msg);
+    });
+
+    set({ offlineQueue: [] });
+    toast.success(`${offlineQueue.length} offline messages sent`);
   }
 }), {
   name: 'chat-storage',
@@ -989,7 +1014,8 @@ const useChatStore = create(
   partialize: (state) => ({ 
     conversations: state.conversations, 
     messages: state.messages,
-    pinnedConversationIds: state.pinnedConversationIds
+    pinnedConversationIds: state.pinnedConversationIds,
+    offlineQueue: state.offlineQueue
   }),
 }));
 

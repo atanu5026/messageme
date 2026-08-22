@@ -78,6 +78,20 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '', // Public key for E2EE (JWK format as string)
     },
+    notificationSettings: {
+      messages: { type: Boolean, default: true },
+      connectionRequests: { type: Boolean, default: true },
+      connectionApprovals: { type: Boolean, default: true },
+      groupMessages: { type: Boolean, default: true },
+      mentions: { type: Boolean, default: true },
+      reactions: { type: Boolean, default: true },
+      calls: { type: Boolean, default: true },
+      statusUpdates: { type: Boolean, default: true },
+      securityAlerts: { type: Boolean, default: true },
+      showPreview: { type: Boolean, default: true },
+      sound: { type: Boolean, default: true },
+      vibrate: { type: Boolean, default: true },
+    },
   },
   { timestamps: true }
 );

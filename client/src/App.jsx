@@ -15,6 +15,7 @@ import { Link } from 'react-router-dom';
 import VideoCall from './components/call/VideoCall';
 import { Toaster } from 'react-hot-toast';
 import useThemeStore from './store/useThemeStore';
+import OfflineBanner from './components/OfflineBanner';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -53,10 +54,19 @@ function App() {
       setTimeout(() => {
         initCallListeners();
       }, 500);
+
+      const handleOnline = () => {
+        useChatStore.getState().syncOfflineMessages();
+      };
+      window.addEventListener('online', handleOnline);
+
+      return () => {
+        disconnectSocket();
+        window.removeEventListener('online', handleOnline);
+      };
     } else {
       disconnectSocket();
     }
-    return () => disconnectSocket();
   }, [user, initializeSocket, disconnectSocket, initCallListeners]);
 
   if (isLoading) {
@@ -103,6 +113,7 @@ function App() {
 
   return (
     <Router>
+      <OfflineBanner />
       <Toaster 
         position="top-right" 
         toastOptions={{
@@ -119,7 +130,7 @@ function App() {
           path="/" 
           element={
             <ProtectedRoute>
-              <div className="h-[100dvh] bg-[#f2f2f7] dark:bg-[#000000] flex flex-col transition-colors duration-300 overflow-hidden relative messageme-tint-bg">
+              <div className="h-[100dvh] pt-safe-top pb-safe-bottom pl-safe-left pr-safe-right bg-[#f2f2f7] dark:bg-[#000000] flex flex-col transition-colors duration-300 overflow-hidden relative messageme-tint-bg">
                 {/* MessageMe Tinted Glass Navbar */}
                 <nav className="glass-panel px-4 sm:px-6 py-2.5 sm:py-3 flex justify-between items-center z-20 shrink-0 border-b border-black/[0.06] dark:border-white/[0.08] transition-colors">
                   <div className="flex items-center space-x-3">

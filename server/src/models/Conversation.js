@@ -46,6 +46,13 @@ const conversationSchema = new mongoose.Schema(
         ref: 'User',
       },
     ],
+    muteSettings: [
+      {
+        user: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        level: { type: String, enum: ['1_hour', '8_hours', '1_week', 'always'], default: 'always' },
+        mutedUntil: { type: Date }
+      }
+    ],
     favoritedBy: [
       {
         type: mongoose.Schema.Types.ObjectId,
