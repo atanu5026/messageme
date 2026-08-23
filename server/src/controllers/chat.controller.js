@@ -218,6 +218,10 @@ const getMessages = async (req, res, next) => {
   try {
     const { conversationId } = req.params;
 
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 50;
+    const startIndex = (page - 1) * limit;
+
     // Verify user is a participant
     const conversation = await Conversation.findById(conversationId).populate('participants', 'name email profilePicture publicKey');
     if (!conversation) {
@@ -227,14 +231,22 @@ const getMessages = async (req, res, next) => {
       return res.status(403).json({ success: false, message: 'Not authorized to view these messages' });
     }
 
-    const messages = await Message.find({ conversationId })
+    const total = await Message.countDocuments({ conversationId });
+
+    // Fetch the latest messages first by sorting descending, then applying skip and limit
+    let messages = await Message.find({ conversationId })
       .populate('senderId', 'name profilePicture publicKey')
       .populate({
         path: 'replyTo',
         select: 'content type senderId isDeleted',
         populate: { path: 'senderId', select: 'name' }
       })
-      .sort({ createdAt: 1 }); // Oldest to newest for chat UI
+      .sort({ createdAt: -1 })
+      .skip(startIndex)
+      .limit(limit);
+
+    // Reverse them so they are chronological (oldest to newest) for the UI
+    messages = messages.reverse();
 
     // Automatically mark unread messages as read when fetched
     const unreadMessages = messages.filter(
@@ -257,6 +269,12 @@ const getMessages = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: messages,
+      pagination: {
+        total,
+        page,
+        limit,
+        hasMore: startIndex + messages.length < total
+      },
       conversation: conversation
     });
   } catch (error) {

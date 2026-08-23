@@ -7,7 +7,7 @@ const Chat = () => {
   const { activeConversation } = useChatStore();
 
   return (
-    <div className="h-[calc(100dvh-57px)] sm:h-[calc(100dvh-65px)] flex overflow-hidden w-full relative messageme-tint-bg">
+    <div className="h-full flex overflow-hidden w-full relative messageme-tint-bg">
       <Sidebar />
       <ChatWindow />
     </div>

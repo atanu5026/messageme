@@ -57,6 +57,8 @@ const useChatStore = create(
   messages: [],
   isConversationsLoading: false,
   isMessagesLoading: false,
+  hasMoreMessages: false,
+  messagePage: 1,
   isImageUploading: false,
   isAudioUploading: false,
   error: null,
@@ -675,10 +677,10 @@ const useChatStore = create(
     }
   },
 
-  fetchMessages: async (conversationId) => {
+  fetchMessages: async (conversationId, page = 1) => {
     set({ isMessagesLoading: true, error: null });
     try {
-      const res = await api.get(`/chat/messages/${conversationId}`);
+      const res = await api.get(`/chat/messages/${conversationId}?page=${page}&limit=50`);
       if (res.data.success) {
         const conversation = res.data.conversation || get().conversations.find(c => c._id === conversationId) || get().activeConversation;
         let messages = res.data.data;
@@ -710,7 +712,12 @@ const useChatStore = create(
           }
         }
         
-        set({ messages, isMessagesLoading: false });
+        set((state) => ({ 
+          messages: page === 1 ? messages : [...messages, ...state.messages], 
+          isMessagesLoading: false,
+          hasMoreMessages: res.data.pagination?.hasMore || false,
+          messagePage: page
+        }));
 
         const { socket } = get();
         const unreadMsg = messages.find(m => m.status !== 'read' && (m.senderId?._id || m.senderId)?.toString() !== currentUserId?.toString());
