@@ -16,6 +16,7 @@ import VideoCall from './components/call/VideoCall';
 import { Toaster } from 'react-hot-toast';
 import useThemeStore from './store/useThemeStore';
 import OfflineBanner from './components/OfflineBanner';
+import { ReactLenis } from 'lenis/react';
 
 // Protected Route Component
 const ProtectedRoute = ({ children }) => {
@@ -112,8 +113,9 @@ function App() {
   }
 
   return (
-    <Router>
-      <OfflineBanner />
+    <ReactLenis root>
+      <Router>
+        <OfflineBanner />
       <Toaster 
         position="top-right" 
         toastOptions={{
@@ -233,8 +235,9 @@ function App() {
             </ProtectedRoute>
           } 
         />
-      </Routes>
-    </Router>
+        </Routes>
+      </Router>
+    </ReactLenis>
   );
 }
 

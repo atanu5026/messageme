@@ -11,6 +11,9 @@ const ChatWindow = () => {
     setActiveConversation,
     messages,
     isMessagesLoading,
+    hasMoreMessages,
+    messagePage,
+    fetchMessages,
     sendMessage,
     setTyping,
     typingUsers,
@@ -47,14 +50,31 @@ const ChatWindow = () => {
   const docInputRef = useRef(null);
   const messageRefs = useRef({});
 
-  // Auto-scroll to bottom on new messages
+  const containerRef = useRef(null);
+  const prevScrollHeightRef = useRef(null);
+
+  // Auto-scroll to bottom on new messages if at bottom, or if it's initial load
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages.length]);
+    // If we loaded older messages (page > 1), maintain scroll position
+    if (messagePage > 1 && containerRef.current && prevScrollHeightRef.current) {
+      const newScrollHeight = containerRef.current.scrollHeight;
+      containerRef.current.scrollTop = newScrollHeight - prevScrollHeightRef.current;
+      prevScrollHeightRef.current = null;
+    } else if (messagePage === 1) {
+      scrollToBottom();
+    }
+  }, [messages.length, messagePage]);
+
+  const handleScroll = (e) => {
+    if (e.target.scrollTop === 0 && hasMoreMessages && !isMessagesLoading) {
+      prevScrollHeightRef.current = e.target.scrollHeight;
+      fetchMessages(activeConversation._id, messagePage + 1);
+    }
+  };
 
   const scrollToMessage = (msgId) => {
     if (msgId && messageRefs.current[msgId]) {
@@ -347,11 +367,21 @@ const ChatWindow = () => {
       )}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 space-y-3">
-        {isMessagesLoading ? (
+      <div 
+        ref={containerRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto px-3 py-4 sm:px-6 space-y-3"
+      >
+        {isMessagesLoading && messagePage === 1 ? (
           <div className="flex justify-center p-6"><span className="text-xs text-[#8e8e93] font-medium">Decrypting messages...</span></div>
         ) : (
-          filteredMessages.map((msg, idx) => {
+          <>
+            {isMessagesLoading && messagePage > 1 && (
+              <div className="flex justify-center p-2">
+                <span className="text-xs text-accent animate-pulse font-medium">Loading older messages...</span>
+              </div>
+            )}
+            {filteredMessages.map((msg, idx) => {
             const isMe = (msg.senderId?._id || msg.senderId) === user?._id;
             const showSenderName = activeConversation.isGroup && !isMe;
             const isDeleted = msg.isDeleted;
@@ -580,7 +610,8 @@ const ChatWindow = () => {
                 </div>
               </div>
             );
-          })
+          })}
+          </>
         )}
         <div ref={messagesEndRef} />
       </div>
