@@ -62,16 +62,14 @@ const useCallStore = create((set, get) => ({
 
     socket.on('ice_candidate', async (candidate) => {
       const pc = get().peerConnection;
-      if (pc) {
-        if (pc.remoteDescription) {
-          try {
-            await pc.addIceCandidate(new RTCIceCandidate(candidate));
-          } catch (e) {
-            console.error('Error adding ice candidate', e);
-          }
-        } else {
-          set(state => ({ pendingIceCandidates: [...state.pendingIceCandidates, candidate] }));
+      if (pc && pc.remoteDescription) {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error('Error adding ice candidate', e);
         }
+      } else {
+        set(state => ({ pendingIceCandidates: [...state.pendingIceCandidates, candidate] }));
       }
     });
 
@@ -174,6 +172,17 @@ const useCallStore = create((set, get) => ({
     if (!pc) return;
 
     await pc.setRemoteDescription(new RTCSessionDescription(incomingCall.signal));
+    
+    const { pendingIceCandidates } = get();
+    for (const candidate of pendingIceCandidates) {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      } catch (e) {
+        console.error('Error adding cached ice candidate', e);
+      }
+    }
+    set({ pendingIceCandidates: [] });
+
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
 

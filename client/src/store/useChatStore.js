@@ -80,14 +80,15 @@ const useChatStore = create(
 
       // Decrypt message if needed
       let decryptedMessage = { ...message };
-      if (!message.isGroup && (message.type === 'text' || message.type === 'document')) {
+      const conv = (activeConversation && activeConversation._id === message.conversationId)
+        ? activeConversation
+        : get().conversations.find(c => c._id === message.conversationId);
+
+      if ((!conv || !conv.isGroup) && (message.type === 'text' || message.type === 'document')) {
         const privateKeyString = localStorage.getItem('e2ee_private_key');
-        const conv = (activeConversation && activeConversation._id === message.conversationId)
-          ? activeConversation
-          : get().conversations.find(c => c._id === message.conversationId);
         
         let otherPublicKey = null;
-        if (conv && !conv.isGroup && conv.participants) {
+        if (conv && conv.participants) {
           const other = conv.participants.find(p => (p._id || p)?.toString() !== currentUserId?.toString());
           otherPublicKey = other?.publicKey;
         }
@@ -210,13 +211,18 @@ const useChatStore = create(
     socket.on('message_edited', async (updatedMessage) => {
       let decryptedMsg = { ...updatedMessage };
       const currentUserId = useAuthStore.getState().user?._id;
-      if (!updatedMessage.isGroup && updatedMessage.type === 'text') {
+      const conv = get().conversations.find(c => c._id === updatedMessage.conversationId) || get().activeConversation;
+
+      if ((!conv || !conv.isGroup) && updatedMessage.type === 'text') {
         const privateKeyString = localStorage.getItem('e2ee_private_key');
-        const conv = get().conversations.find(c => c._id === updatedMessage.conversationId) || get().activeConversation;
         let otherPublicKey = null;
-        if (conv && !conv.isGroup && conv.participants) {
+        if (conv && conv.participants) {
           const other = conv.participants.find(p => (p._id || p)?.toString() !== currentUserId?.toString());
-          otherPublicKey = other?.publicKey || updatedMessage.senderId?.publicKey;
+          otherPublicKey = other?.publicKey;
+        }
+        const senderIdStr = (updatedMessage.senderId?._id || updatedMessage.senderId)?.toString();
+        if (!otherPublicKey && senderIdStr && senderIdStr !== currentUserId?.toString() && updatedMessage.senderId?.publicKey) {
+          otherPublicKey = updatedMessage.senderId.publicKey;
         }
         if (otherPublicKey && privateKeyString) {
           decryptedMsg.content = await decryptDirectMessage(updatedMessage.content, otherPublicKey, privateKeyString);
@@ -245,15 +251,22 @@ const useChatStore = create(
     socket.on('message_pinned', async ({ conversationId, pinnedMessage }) => {
       let decryptedPinned = pinnedMessage ? { ...pinnedMessage } : null;
       const currentUserId = useAuthStore.getState().user?._id;
-      if (decryptedPinned && decryptedPinned.type === 'text') {
+      const conv = get().conversations.find(c => c._id === conversationId) || get().activeConversation;
+      
+      if (decryptedPinned && decryptedPinned.type === 'text' && (!conv || !conv.isGroup)) {
         const privateKeyString = localStorage.getItem('e2ee_private_key');
-        const conv = get().conversations.find(c => c._id === conversationId) || get().activeConversation;
-        if (conv && !conv.isGroup && conv.participants && privateKeyString) {
+        let otherPublicKey = null;
+        if (conv && conv.participants) {
           const other = conv.participants.find(p => (p._id || p)?.toString() !== currentUserId?.toString());
-          const otherPublicKey = other?.publicKey || decryptedPinned.senderId?.publicKey;
-          if (otherPublicKey) {
-            decryptedPinned.content = await decryptDirectMessage(decryptedPinned.content, otherPublicKey, privateKeyString);
-          }
+          otherPublicKey = other?.publicKey;
+        }
+        const senderIdStr = (decryptedPinned.senderId?._id || decryptedPinned.senderId)?.toString();
+        if (!otherPublicKey && senderIdStr && senderIdStr !== currentUserId?.toString() && decryptedPinned.senderId?.publicKey) {
+          otherPublicKey = decryptedPinned.senderId.publicKey;
+        }
+
+        if (otherPublicKey && privateKeyString) {
+          decryptedPinned.content = await decryptDirectMessage(decryptedPinned.content, otherPublicKey, privateKeyString);
         }
       }
 
