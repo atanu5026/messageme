@@ -165,7 +165,7 @@ const VideoCall = () => {
   if (callStatus === 'ringing' && incomingCall && callType === 'video') {
     return (
       <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-        <div className="bg-white rounded-2xl p-8 flex flex-col items-center animate-bounce shadow-2xl min-w-[300px]">
+        <div className="bg-white rounded-2xl p-8 flex flex-col items-center shadow-2xl min-w-[300px]">
           <div className="w-20 h-20 rounded-full flex items-center justify-center mb-4 bg-blue-100 text-blue-500">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-10 h-10">
               <path fillRule="evenodd" d="M1.5 4.5a3 3 0 013-3h1.372c.86 0 1.61.586 1.819 1.42l1.105 4.423a1.875 1.875 0 01-.694 1.955l-1.293.97c-.135.101-.164.249-.126.352a11.285 11.285 0 006.697 6.697c.103.038.25.009.352-.126l.97-1.293a1.875 1.875 0 011.955-.694l4.423 1.105c.834.209 1.42.959 1.42 1.82V19.5a3 3 0 01-3 3h-2.25C8.552 22.5 1.5 15.448 1.5 6.75V4.5z" clipRule="evenodd" />
@@ -207,7 +207,7 @@ const VideoCall = () => {
             autoPlay 
             playsInline
             muted={isSwapped} // Mute local stream if it is in main view to avoid echo
-            className={`w-full h-full object-cover ${(isSwapped && !isScreenSharing) ? 'transform -scale-x-100' : ''}`} 
+            className={`w-full h-full object-cover md:object-contain ${(isSwapped && !isScreenSharing) ? 'transform -scale-x-100' : ''}`} 
           />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center text-white/50 text-xl font-medium tracking-widest animate-pulse">

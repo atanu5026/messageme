@@ -142,7 +142,7 @@ export const decryptPayload = async (sharedKey, encryptedStr) => {
     return dec.decode(decrypted);
   } catch (error) {
     console.error('Decryption failed:', error);
-    // If decryption fails, return original string (e.g. if plain text or key mismatch)
-    return encryptedStr;
+    // If decryption fails due to key mismatch or corruption, don't return the ugly JSON string
+    return '🔒 [Message could not be decrypted]';
   }
 };

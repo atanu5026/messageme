@@ -11,17 +11,28 @@ import { importPrivateKey, importPublicKey, deriveSharedKey, encryptPayload, dec
 // Helper to decrypt a direct 1-on-1 message
 const decryptDirectMessage = async (content, otherPublicKey, privateKeyString) => {
   if (!content || typeof content !== 'string' || !content.trim().startsWith('{')) return content;
-  if (!otherPublicKey || !privateKeyString) return content;
+  
+  const isEncryptedFormat = (str) => {
+    try { const parsed = JSON.parse(str); return !!(parsed.iv && parsed.data); } catch { return false; }
+  };
+  
+  if (!isEncryptedFormat(content)) return content;
+  
+  const fallback = '🔒 [Message could not be decrypted]';
+  if (!otherPublicKey || !privateKeyString) return fallback;
+
   try {
     const privateKey = await importPrivateKey(privateKeyString);
     const publicKey = await importPublicKey(otherPublicKey);
-    if (!privateKey || !publicKey) return content;
+    if (!privateKey || !publicKey) return fallback;
     const sharedKey = await deriveSharedKey(privateKey, publicKey);
-    if (!sharedKey) return content;
-    return await decryptPayload(sharedKey, content);
+    if (!sharedKey) return fallback;
+    const decrypted = await decryptPayload(sharedKey, content);
+    if (decrypted === content) return fallback;
+    return decrypted;
   } catch (err) {
     console.error('Failed to decrypt direct message:', err);
-    return '🔒 [This message could not be decrypted]';
+    return fallback;
   }
 };
 
@@ -442,25 +453,24 @@ const useChatStore = create(
           fetchedConversations = await Promise.all(fetchedConversations.map(async (conv) => {
             if (!conv.isGroup && conv.participants) {
               const other = conv.participants.find(p => (p._id || p)?.toString() !== currentUserId?.toString());
-              if (other?.publicKey) {
-                let decryptedLastMsg = conv.lastMessage;
-                if (conv.lastMessage && (conv.lastMessage.type === 'text' || conv.lastMessage.type === 'document')) {
-                  const decrypted = await decryptDirectMessage(conv.lastMessage.content, other.publicKey, privateKeyString);
-                  decryptedLastMsg = { ...conv.lastMessage, content: decrypted };
-                }
-
-                let decryptedPinnedMsg = conv.pinnedMessage;
-                if (conv.pinnedMessage && (conv.pinnedMessage.type === 'text' || conv.pinnedMessage.type === 'document')) {
-                  const decrypted = await decryptDirectMessage(conv.pinnedMessage.content, other.publicKey, privateKeyString);
-                  decryptedPinnedMsg = { ...conv.pinnedMessage, content: decrypted };
-                }
-
-                return {
-                  ...conv,
-                  lastMessage: decryptedLastMsg,
-                  pinnedMessage: decryptedPinnedMsg
-                };
+              
+              let decryptedLastMsg = conv.lastMessage;
+              if (conv.lastMessage && (conv.lastMessage.type === 'text' || conv.lastMessage.type === 'document')) {
+                const decrypted = await decryptDirectMessage(conv.lastMessage.content, other?.publicKey, privateKeyString);
+                decryptedLastMsg = { ...conv.lastMessage, content: decrypted };
               }
+
+              let decryptedPinnedMsg = conv.pinnedMessage;
+              if (conv.pinnedMessage && (conv.pinnedMessage.type === 'text' || conv.pinnedMessage.type === 'document')) {
+                const decrypted = await decryptDirectMessage(conv.pinnedMessage.content, other?.publicKey, privateKeyString);
+                decryptedPinnedMsg = { ...conv.pinnedMessage, content: decrypted };
+              }
+
+              return {
+                ...conv,
+                lastMessage: decryptedLastMsg,
+                pinnedMessage: decryptedPinnedMsg
+              };
             }
             return conv;
           }));
@@ -685,12 +695,12 @@ const useChatStore = create(
               const senderIdStr = (msg.senderId?._id || msg.senderId)?.toString();
               const keyToUse = otherPublicKey || (senderIdStr && senderIdStr !== currentUserId?.toString() ? msg.senderId?.publicKey : null);
               
-              if ((msg.type === 'text' || msg.type === 'document') && keyToUse) {
+              if (msg.type === 'text' || msg.type === 'document') {
                 decryptedContent = await decryptDirectMessage(msg.content, keyToUse, privateKeyString);
               }
 
               let decryptedReplyTo = msg.replyTo;
-              if (msg.replyTo && (msg.replyTo.type === 'text' || msg.replyTo.type === 'document') && keyToUse) {
+              if (msg.replyTo && (msg.replyTo.type === 'text' || msg.replyTo.type === 'document')) {
                 const replyContent = await decryptDirectMessage(msg.replyTo.content, keyToUse, privateKeyString);
                 decryptedReplyTo = { ...msg.replyTo, content: replyContent };
               }
